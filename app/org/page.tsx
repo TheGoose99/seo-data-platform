@@ -50,7 +50,7 @@ export default async function OrgPage(props: { searchParams: Promise<{ org_id?: 
           <Link
             key={m.org_id}
             href={`/org?org_id=${encodeURIComponent(m.org_id)}`}
-            className={`rounded-xl border p-4 transition-colors ${
+            className={`rounded-xl border p-4 transition-all duration-150 ease-out hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:focus-visible:ring-white/20 ${
               m.org_id === orgId
                 ? 'border-black/30 bg-black/[.03] dark:border-white/30 dark:bg-white/10'
                 : 'border-black/10 hover:bg-black/[.02] dark:border-white/15 dark:hover:bg-white/5'
