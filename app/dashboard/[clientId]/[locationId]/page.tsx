@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import { canMutateOrgData } from '@/lib/rbac/server'
 import { RunIngestButton } from '@/components/dashboard/run-ingest-button'
-import { KeywordSelect } from '@/components/dashboard/keyword-select'
+import { HeatmapQueryPanel } from '@/components/dashboard/heatmap-query-panel'
 
 function startOfDayIso(daysAgo: number) {
   const d = new Date()
@@ -11,9 +11,28 @@ function startOfDayIso(daysAgo: number) {
   return d.toISOString().slice(0, 10)
 }
 
+function isValidYmd(s: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s)
+}
+
+function groupObservedDates(
+  rows: { keyword_id: string; observed_date: string }[] | null,
+): Record<string, string[]> {
+  const map: Record<string, Set<string>> = {}
+  for (const r of rows ?? []) {
+    if (!map[r.keyword_id]) map[r.keyword_id] = new Set()
+    map[r.keyword_id].add(r.observed_date)
+  }
+  const out: Record<string, string[]> = {}
+  for (const [k, set] of Object.entries(map)) {
+    out[k] = Array.from(set).sort((a, b) => (a < b ? 1 : -1))
+  }
+  return out
+}
+
 export default async function DashboardPage(props: {
   params: Promise<{ clientId: string; locationId: string }>
-  searchParams: Promise<{ keyword_id?: string; org_id?: string }>
+  searchParams: Promise<{ keyword_id?: string; observed_date?: string; org_id?: string }>
 }) {
   const { clientId, locationId } = await props.params
   const searchParams = await props.searchParams
@@ -49,18 +68,29 @@ export default async function DashboardPage(props: {
   type KeywordRow = { id: string; keyword_raw: string }
   const keywords: KeywordRow[] = (keywordsRaw ?? []) as KeywordRow[]
 
-  const keywordId = searchParams.keyword_id ?? keywords[0]?.id ?? null
+  const keywordIds = keywords.map((k) => k.id)
+  const { data: dateRows } =
+    keywordIds.length > 0
+      ? await supabase
+          .from('serp_grid_observations')
+          .select('keyword_id, observed_date')
+          .in('keyword_id', keywordIds)
+      : { data: [] as { keyword_id: string; observed_date: string }[] }
 
-  let serpDate: string | null = null
-  if (keywordId) {
-    const { data: latest } = await supabase
-      .from('serp_grid_observations')
-      .select('observed_date')
-      .eq('keyword_id', keywordId)
-      .order('observed_date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    serpDate = latest?.observed_date ?? null
+  const observedDatesByKeyword = groupObservedDates(dateRows ?? [])
+
+  const keywordIdParam = searchParams.keyword_id?.trim() ?? ''
+  const observedDateParam = searchParams.observed_date?.trim() ?? ''
+
+  let heatmapReady = false
+  if (
+    keywordIdParam &&
+    observedDateParam &&
+    isValidYmd(observedDateParam) &&
+    keywords.some((k) => k.id === keywordIdParam)
+  ) {
+    const dates = observedDatesByKeyword[keywordIdParam] ?? []
+    heatmapReady = dates.includes(observedDateParam)
   }
 
   type ObservationRow = {
@@ -69,12 +99,12 @@ export default async function DashboardPage(props: {
   }
 
   const observations: ObservationRow[] =
-    keywordId && serpDate
+    heatmapReady && keywordIdParam && observedDateParam
       ? ((await supabase
           .from('serp_grid_observations')
           .select('rank,grid_points(point_index)')
-          .eq('keyword_id', keywordId)
-          .eq('observed_date', serpDate)).data as ObservationRow[] | null) ?? []
+          .eq('keyword_id', keywordIdParam)
+          .eq('observed_date', observedDateParam)).data as ObservationRow[] | null) ?? []
       : []
 
   const ranksByIndex = new Map<number, number | null>()
@@ -136,50 +166,62 @@ export default async function DashboardPage(props: {
           </div>
         </div>
 
-        <div className="min-w-[260px] rounded-2xl border border-black/10 p-4 dark:border-white/15">
-          <div className="text-sm font-medium">Keyword</div>
-          <div className="mt-2">
-            {keywordId ? (
-              <KeywordSelect
-                clientId={clientId}
-                locationId={locationId}
-                orgId={client.org_id}
-                keywordId={keywordId}
-                keywords={keywords}
-              />
-            ) : (
-              <div className="text-sm text-black/60 dark:text-white/60">No keywords yet.</div>
-            )}
-          </div>
-          <div className="mt-3 text-xs text-black/60 dark:text-white/60">
-            Heatmap date: {serpDate ?? '—'}
-          </div>
+        <div className="w-full min-w-[280px] max-w-md">
+          <HeatmapQueryPanel
+            key={`${keywordIdParam}-${observedDateParam}`}
+            orgId={client.org_id}
+            clientId={clientId}
+            locationId={locationId}
+            clientDisplayName={client.display_name}
+            locationAddress={location.address_text}
+            keywords={keywords}
+            observedDatesByKeyword={observedDatesByKeyword}
+            initialKeywordId={keywords.some((k) => k.id === keywordIdParam) ? keywordIdParam : null}
+            initialObservedDate={isValidYmd(observedDateParam) ? observedDateParam : null}
+          />
         </div>
       </div>
 
       <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
           <h2 className="text-lg font-semibold">Grid heatmap (5×5)</h2>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">Lower rank is better. Empty means not found.</p>
+          {heatmapReady ? (
+            <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+              Observation date: {observedDateParam}. Lower rank is better. Empty cell means not found.
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-amber-800 dark:text-amber-200/90">
+              Select a keyword and a snapshot date that exists in your data, then click &quot;Load heatmap&quot; above.
+            </p>
+          )}
 
           <div className="mt-4 grid grid-cols-5 gap-2">
-            {Array.from({ length: size * size }).map((_, i) => {
-              const r = ranksByIndex.get(i) ?? null
-              const good = r !== null && r <= 3
-              const mid = r !== null && r > 3 && r <= 10
-              const cls = good
-                ? 'bg-emerald-500/20 border-emerald-500/30'
-                : mid
-                  ? 'bg-amber-500/20 border-amber-500/30'
-                  : r !== null
-                    ? 'bg-rose-500/15 border-rose-500/25'
-                    : 'bg-black/[.03] border-black/10 dark:bg-white/10 dark:border-white/15'
-              return (
-                <div key={i} className={`aspect-square rounded-lg border flex items-center justify-center ${cls}`}>
-                  <span className="text-sm font-medium">{r ?? '—'}</span>
-                </div>
-              )
-            })}
+            {heatmapReady
+              ? Array.from({ length: size * size }).map((_, i) => {
+                  const r = ranksByIndex.get(i) ?? null
+                  const good = r !== null && r <= 3
+                  const mid = r !== null && r > 3 && r <= 10
+                  const cls = good
+                    ? 'bg-emerald-500/20 border-emerald-500/30'
+                    : mid
+                      ? 'bg-amber-500/20 border-amber-500/30'
+                      : r !== null
+                        ? 'bg-rose-500/15 border-rose-500/25'
+                        : 'bg-black/[.03] border-black/10 dark:bg-white/10 dark:border-white/15'
+                  return (
+                    <div key={i} className={`aspect-square rounded-lg border flex items-center justify-center ${cls}`}>
+                      <span className="text-sm font-medium">{r ?? '—'}</span>
+                    </div>
+                  )
+                })
+              : Array.from({ length: size * size }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-black/15 bg-black/[.02] dark:border-white/20 dark:bg-white/[.03]"
+                  >
+                    <span className="text-xs text-black/35 dark:text-white/35">—</span>
+                  </div>
+                ))}
           </div>
         </section>
 
@@ -251,4 +293,3 @@ export default async function DashboardPage(props: {
     </div>
   )
 }
-
