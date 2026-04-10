@@ -22,6 +22,12 @@ export function OnboardClientForm({ orgId }: Props) {
   const [keywordTags, setKeywordTags] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
+  const [addrQuery, setAddrQuery] = useState("");
+  const [addrPredictions, setAddrPredictions] = useState<Array<{ description: string; placeId: string }>>([]);
+  const [addrOpen, setAddrOpen] = useState(false);
+  const [addrLoading, setAddrLoading] = useState(false);
+  const [addrError, setAddrError] = useState<string | null>(null);
+
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -48,11 +54,137 @@ export function OnboardClientForm({ orgId }: Props) {
     setSuggestions((prev) => prev.filter((x) => x !== s));
   }, [addKeyword]);
 
+  function buildSuggestionsFromPlace(locality: string | null, region: string | null) {
+    const name = displayName.trim() || "business";
+    const city = (locality ?? "").trim();
+    const reg = (region ?? "").trim();
+    const raw = [
+      city ? `${name} ${city}` : `${name} near me`,
+      city ? `${city} ${name}` : `${name} reviews`,
+      city && reg ? `${name} ${city} ${reg}` : "",
+      city ? `${name} programări ${city}` : "",
+      city ? `${name} ${city} centru` : "",
+      `${name} contact`,
+      `${name} pret`,
+    ].filter(Boolean);
+
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of raw) {
+      const k = normalizeKeyword(s);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(s);
+      if (out.length >= 8) break;
+    }
+    while (out.length < 5) out.push(`${name} ${out.length + 1}`);
+    setSuggestions((prev) => {
+      const merged = [...out, ...prev];
+      const unique: string[] = [];
+      const u = new Set<string>();
+      for (const s of merged) {
+        const k = normalizeKeyword(s);
+        if (u.has(k)) continue;
+        if (keywordTagsRef.current.some((t) => normalizeKeyword(t) === k)) continue;
+        u.add(k);
+        unique.push(s);
+        if (unique.length >= 10) break;
+      }
+      return unique;
+    });
+  }
+
   useEffect(() => {
     setSuggestions((prev) =>
       prev.filter((s) => !keywordTags.some((k) => normalizeKeyword(k) === normalizeKeyword(s))),
     );
   }, [keywordTags]);
+
+  useEffect(() => {
+    // Keep the address search box in sync with the actual address field.
+    setAddrQuery(addressText);
+  }, [addressText]);
+
+  useEffect(() => {
+    const q = addrQuery.trim();
+    if (q.length < 3) {
+      setAddrPredictions([]);
+      setAddrError(null);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setAddrLoading(true);
+      setAddrError(null);
+      try {
+        const res = await fetch("/api/google/places/autocomplete", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ input: q, language: "ro", region: "ro" }),
+        });
+        const json = (await res.json()) as {
+          predictions?: Array<{ description: string; placeId: string }>;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          setAddrError(json.error ?? "Autocomplete failed");
+          setAddrPredictions([]);
+          return;
+        }
+        setAddrPredictions(json.predictions ?? []);
+        setAddrOpen(true);
+      } catch (e) {
+        if (cancelled) return;
+        setAddrError(e instanceof Error ? e.message : String(e));
+        setAddrPredictions([]);
+      } finally {
+        if (!cancelled) setAddrLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [addrQuery]);
+
+  async function selectPrediction(placeId: string, description: string) {
+    setAddrOpen(false);
+    setAddrError(null);
+    setAddressText(description);
+    setAddrQuery(description);
+    setPlaceId(placeId);
+    try {
+      const res = await fetch("/api/google/places/details", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ placeId, language: "ro" }),
+      });
+      const json = (await res.json()) as {
+        formattedAddress?: string | null;
+        lat?: number;
+        lng?: number;
+        locality?: string | null;
+        region?: string | null;
+        error?: string;
+      };
+      if (!res.ok) {
+        setAddrError(json.error ?? "Failed to load address details");
+        return;
+      }
+      if (json.formattedAddress) {
+        setAddressText(json.formattedAddress);
+        setAddrQuery(json.formattedAddress);
+      }
+      if (json.lat != null && json.lng != null) {
+        setLat(String(json.lat));
+        setLng(String(json.lng));
+      }
+      buildSuggestionsFromPlace(json.locality ?? null, json.region ?? null);
+    } catch (e) {
+      setAddrError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   function onKeywordKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
@@ -200,10 +332,45 @@ export function OnboardClientForm({ orgId }: Props) {
             <input
               className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
               value={addressText}
-              onChange={(e) => setAddressText(e.target.value)}
+              onChange={(e) => {
+                setAddressText(e.target.value);
+                setAddrOpen(true);
+              }}
+              onFocus={() => setAddrOpen(true)}
+              onBlur={() => {
+                // Let click events on dropdown buttons run first
+                setTimeout(() => setAddrOpen(false), 120);
+              }}
               placeholder="Strada Exemplu 1, București"
               required
             />
+            {addrOpen && (addrPredictions.length > 0 || addrLoading || addrError) ? (
+              <div className="relative">
+                <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/15 dark:bg-black">
+                  {addrLoading ? (
+                    <div className="px-3 py-2 text-sm text-black/60 dark:text-white/60">Searching…</div>
+                  ) : addrError ? (
+                    <div className="px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{addrError}</div>
+                  ) : addrPredictions.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-black/60 dark:text-white/60">No suggestions</div>
+                  ) : (
+                    <div className="max-h-64 overflow-auto">
+                      {addrPredictions.slice(0, 8).map((p) => (
+                        <button
+                          key={p.placeId}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => void selectPrediction(p.placeId, p.description)}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-black/[.04] dark:hover:bg-white/10"
+                        >
+                          {p.description}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
           <button
             type="button"

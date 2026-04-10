@@ -1,0 +1,82 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+
+type Body = {
+  placeId?: string
+  language?: string
+}
+
+type GooglePlacesDetailsResponse = {
+  status: string
+  error_message?: string
+  result?: {
+    formatted_address?: string
+    geometry?: { location?: { lat?: number; lng?: number } }
+    address_components?: Array<{ long_name: string; short_name: string; types: string[] }>
+  }
+}
+
+function findComponent(
+  comps: NonNullable<GooglePlacesDetailsResponse['result']>['address_components'],
+  type: string,
+) {
+  return comps?.find((c) => c.types.includes(type)) ?? null
+}
+
+export async function POST(request: Request) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) return NextResponse.json({ error: 'Missing GOOGLE_MAPS_API_KEY' }, { status: 500 })
+
+  const body = (await request.json()) as Body
+  const placeId = (body.placeId ?? '').trim()
+  if (!placeId) return NextResponse.json({ error: 'Missing placeId' }, { status: 400 })
+
+  const params = new URLSearchParams({
+    place_id: placeId,
+    key: apiKey,
+    language: body.language ?? 'ro',
+    fields: 'formatted_address,geometry,address_component',
+  })
+
+  const res = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`)
+  const json = (await res.json()) as GooglePlacesDetailsResponse
+
+  if (!res.ok || json.status === 'REQUEST_DENIED' || json.status === 'INVALID_REQUEST') {
+    return NextResponse.json(
+      { error: json.error_message ?? `Places details failed: ${json.status}` },
+      { status: 502 },
+    )
+  }
+
+  const lat = json.result?.geometry?.location?.lat
+  const lng = json.result?.geometry?.location?.lng
+  const formattedAddress = json.result?.formatted_address ?? null
+
+  const comps = json.result?.address_components ?? []
+  const locality =
+    findComponent(comps, 'locality')?.long_name ??
+    findComponent(comps, 'postal_town')?.long_name ??
+    findComponent(comps, 'administrative_area_level_2')?.long_name ??
+    null
+  const region = findComponent(comps, 'administrative_area_level_1')?.long_name ?? null
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return NextResponse.json({ error: 'Missing geometry from Places details' }, { status: 502 })
+  }
+
+  return NextResponse.json({
+    placeId,
+    formattedAddress,
+    lat,
+    lng,
+    locality,
+    region,
+  })
+}
+

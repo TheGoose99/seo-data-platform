@@ -68,6 +68,12 @@ export default async function OrgPage(props: { searchParams: Promise<{ org_id?: 
         <div className="mt-10 rounded-2xl border border-black/10 p-6 dark:border-white/15">
           <h2 className="text-lg font-semibold">Org actions</h2>
           <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              className="rounded-md border border-black/10 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-black/[.04] hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/15 dark:hover:bg-white/10 dark:focus-visible:ring-white/20"
+              href={`/clients?org_id=${encodeURIComponent(orgId)}`}
+            >
+              View clients
+            </Link>
             <a
               className="rounded-md bg-black px-3 py-2 text-sm font-medium text-white transition-all duration-150 ease-out hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 dark:bg-white dark:text-black dark:focus-visible:ring-white/30"
               href={`/api/auth/google/start?org_id=${encodeURIComponent(orgId)}`}
