@@ -14,12 +14,10 @@ export function LoginForm() {
     setStatus(null);
 
     const supabase = createClient();
-    const fn =
+    const { error } =
       mode === "signin"
-        ? supabase.auth.signInWithPassword
-        : supabase.auth.signUp;
-
-    const { error } = await fn({ email, password });
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password });
     if (error) {
       setStatus(error.message);
       return;
