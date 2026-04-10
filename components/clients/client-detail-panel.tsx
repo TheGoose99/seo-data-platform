@@ -46,6 +46,7 @@ type Props = {
   locations: LocationRow[];
   keywords: KeywordRow[];
   canEdit: boolean;
+  canDelete: boolean;
 };
 
 function cleanCoord(v: number | null): number | null {
@@ -55,7 +56,7 @@ function cleanCoord(v: number | null): number | null {
 
 export function ClientDetailPanel(props: Props) {
   const router = useRouter();
-  const { orgId, client, canEdit } = props;
+  const { orgId, client, canEdit, canDelete } = props;
 
   const [displayName, setDisplayName] = useState(client.display_name);
   const [clientSlug, setClientSlug] = useState(client.client_slug);
@@ -201,10 +202,61 @@ export function ClientDetailPanel(props: Props) {
 
   if (!canEdit) {
     return (
-      <p className="rounded-xl border border-black/10 p-4 text-sm text-black/70 dark:border-white/15 dark:text-white/70">
-        You can view this client. Editing and deletion are limited to CloseBy platform admins (owner/admin in the
-        operator org).
-      </p>
+      <div className="space-y-8">
+        <p className="text-sm text-black/70 dark:text-white/70">
+          You can view this client. Editing (name, address, keywords) is available to org owners, admins, and members.
+          Viewers are read-only here.
+        </p>
+        <section className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
+          <h2 className="text-lg font-semibold">Client</h2>
+          <dl className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+            <div>
+              <dt className="text-xs text-black/50 dark:text-white/50">Display name</dt>
+              <dd className="font-medium">{client.display_name}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-black/50 dark:text-white/50">Slug</dt>
+              <dd>{client.client_slug}</dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-xs text-black/50 dark:text-white/50">Primary domain</dt>
+              <dd>{client.primary_domain ?? "—"}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-black/50 dark:text-white/50">
+            Created {new Date(client.created_at).toLocaleString()}
+          </p>
+        </section>
+        <section className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
+          <h2 className="text-lg font-semibold">Locations</h2>
+          <div className="mt-4 space-y-4">
+            {props.locations.map((loc) => (
+              <div key={loc.id} className="rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
+                <div className="font-medium text-black/80 dark:text-white/80">{loc.address_text}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-black/60 dark:text-white/60">
+                  <span>
+                    Lat {loc.lat ?? "—"} · Lng {loc.lng ?? "—"}
+                  </span>
+                  <span>Place ID: {loc.place_id ?? "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
+          <h2 className="text-lg font-semibold">Keywords</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {props.keywords.map((k) => (
+              <span
+                key={k.id}
+                className="inline-flex rounded-full border border-black/15 bg-black/[.04] px-3 py-1 text-xs font-medium dark:border-white/20 dark:bg-white/10"
+              >
+                {k.keyword_raw}
+              </span>
+            ))}
+          </div>
+        </section>
+      </div>
     );
   }
 
@@ -248,14 +300,16 @@ export function ClientDetailPanel(props: Props) {
           >
             {clientSaving ? "Saving…" : "Save client"}
           </button>
-          <button
-            type="button"
-            disabled={clientSaving}
-            onClick={() => void deleteClient()}
-            className="rounded-md border border-rose-500/40 px-3 py-2 text-sm text-rose-700 transition-colors hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-300"
-          >
-            Delete client
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              disabled={clientSaving}
+              onClick={() => void deleteClient()}
+              className="rounded-md border border-rose-500/40 px-3 py-2 text-sm text-rose-700 transition-colors hover:bg-rose-500/10 disabled:opacity-50 dark:text-rose-300"
+            >
+              Delete client
+            </button>
+          ) : null}
           {clientStatus ? <span className="text-sm text-black/60 dark:text-white/60">{clientStatus}</span> : null}
         </div>
         <p className="mt-3 text-xs text-black/50 dark:text-white/50">Created {new Date(client.created_at).toLocaleString()}</p>

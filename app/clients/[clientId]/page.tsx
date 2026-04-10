@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
-import { canMutateOrgData } from '@/lib/rbac/server'
+import { canDeleteOrgClient, canEditOrgBusinessData } from '@/lib/rbac/server'
 import { ClientDetailPanel } from '@/components/clients/client-detail-panel'
 
 function websiteUrl(primaryDomain: string | null) {
@@ -46,7 +46,8 @@ export default async function ClientDetailPage(props: {
     .maybeSingle()
   if (!membership) redirect('/org')
 
-  const canEdit = await canMutateOrgData(supabase, orgId, user.id)
+  const canEdit = await canEditOrgBusinessData(supabase, orgId, user.id)
+  const canDelete = await canDeleteOrgClient(supabase, orgId, user.id)
 
   const { data: client } = await supabase
     .from('clients')
@@ -140,6 +141,7 @@ export default async function ClientDetailPage(props: {
           locations={locations ?? []}
           keywords={keywords ?? []}
           canEdit={canEdit}
+          canDelete={canDelete}
         />
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { canMutateOrgData } from '@/lib/rbac/server'
+import { canEditOrgBusinessData, canMutateOrgData } from '@/lib/rbac/server'
 import { geocodeSuggestionsBody } from '@/lib/validation/api'
 import { zodErrorMessage } from '@/lib/validation/parse'
 
@@ -92,7 +92,10 @@ export async function POST(request: Request) {
 
   const body = parsed.data
 
-  if (!(await canMutateOrgData(supabase, body.orgId, user.id))) {
+  const allowed =
+    (await canMutateOrgData(supabase, body.orgId, user.id)) ||
+    (await canEditOrgBusinessData(supabase, body.orgId, user.id))
+  if (!allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

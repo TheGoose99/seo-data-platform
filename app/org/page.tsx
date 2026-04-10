@@ -39,7 +39,7 @@ export default async function OrgPage(props: { searchParams: Promise<{ org_id?: 
   const canManageSelectedOrg = orgId ? await canMutateOrgData(supabase, orgId, user.id) : false
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-10">
+    <div className="mx-auto w-full max-w-4xl overflow-visible px-6 py-10">
       <div className="flex flex-wrap items-start justify-between gap-6">
         <div>
           <h1 className="text-2xl font-semibold">Organizations</h1>
@@ -77,7 +77,7 @@ export default async function OrgPage(props: { searchParams: Promise<{ org_id?: 
       </div>
 
       {orgId ? (
-        <div className="mt-10 rounded-2xl border border-black/10 p-6 dark:border-white/15">
+        <div className="mt-10 overflow-visible rounded-2xl border border-black/10 p-6 dark:border-white/15">
           <h2 className="text-lg font-semibold">Org actions</h2>
           <p className="mt-2 text-sm text-black/60 dark:text-white/60">
             Integrations (Google OAuth, GSC/GBP tokens) are stored per organization and shared with every member who
@@ -114,7 +114,7 @@ export default async function OrgPage(props: { searchParams: Promise<{ org_id?: 
                 >
                   Onboard client
                 </Link>
-                <InfoTooltip text="Creates clients, locations, and keywords under this org. Visible to all org members after creation; editing is limited to CloseBy platform admins." />
+                <InfoTooltip text="Creates new clients under this org (CloseBy operators only). Existing clients can be edited by org owner, admin, or member on the client page." />
               </span>
             ) : (
               <span className="rounded-md border border-black/10 px-3 py-2 text-sm text-black/40 dark:border-white/15 dark:text-white/40">

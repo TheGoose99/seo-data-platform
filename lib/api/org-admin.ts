@@ -1,1 +1,8 @@
-export { canMutateOrgData, isOrgMember, isPlatformOperatorAdmin } from '@/lib/rbac/server'
+export {
+  canDeleteOrgClient,
+  canEditOrgBusinessData,
+  canMutateOrgData,
+  getOrgMembershipRole,
+  isOrgMember,
+  isPlatformOperatorAdmin,
+} from '@/lib/rbac/server'

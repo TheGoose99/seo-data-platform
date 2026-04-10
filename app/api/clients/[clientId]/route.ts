@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { canMutateOrgData } from '@/lib/api/org-admin'
+import { canDeleteOrgClient, canEditOrgBusinessData } from '@/lib/api/org-admin'
 import { normalizeClientSlug } from '@/lib/clients/text'
 import { patchClientBody } from '@/lib/validation/api'
 import { zodErrorMessage } from '@/lib/validation/parse'
@@ -34,7 +34,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ clientId:
   const body = parsed.data
   const orgId = body.orgId
 
-  if (!(await canMutateOrgData(supabase, orgId, user.id))) {
+  if (!(await canEditOrgBusinessData(supabase, orgId, user.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -84,7 +84,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ clientId
 
   const orgId = q.data.org_id
 
-  if (!(await canMutateOrgData(supabase, orgId, user.id))) {
+  if (!(await canDeleteOrgClient(supabase, orgId, user.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
