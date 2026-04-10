@@ -32,7 +32,7 @@ export function CreateOrgForm() {
       return;
     }
 
-    window.location.href = `/org?org_id=${encodeURIComponent(json.orgId)}`;
+    window.location.href = `/clients/new?org_id=${encodeURIComponent(json.orgId)}`;
   }
 
   return (

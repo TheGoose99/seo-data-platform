@@ -22,7 +22,7 @@ export function AppHeader() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (pathname === "/login" || pathname === "/") {
+  if (pathname === "/login" || pathname === "/" || pathname === "/access-denied" || pathname.startsWith("/app")) {
     return null;
   }
 
@@ -35,7 +35,7 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-black/10 bg-white/90 backdrop-blur dark:border-white/15 dark:bg-black/90">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-3">
-        <Link href="/org" className="text-sm font-semibold">
+        <Link href="/app" className="text-sm font-semibold">
           SEO Data Platform
         </Link>
         <div className="flex items-center gap-3">

@@ -14,8 +14,8 @@ function applySecurityHeaders(response: NextResponse) {
 
 function requiresAuth(pathname: string) {
   if (pathname.startsWith('/api/')) return false
-  if (pathname === '/login' || pathname === '/') return false
-  const protectedPrefixes = ['/org', '/clients', '/dashboard']
+  if (pathname === '/login' || pathname === '/' || pathname === '/access-denied') return false
+  const protectedPrefixes = ['/org', '/clients', '/dashboard', '/app']
   return protectedPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 }
 

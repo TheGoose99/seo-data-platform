@@ -2,38 +2,66 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Props = { orgId: string };
+export type OnboardInitialClient = {
+  clientId: string;
+  locationId: string;
+  displayName: string;
+  clientSlug: string;
+  primaryDomain: string;
+  addressText: string;
+  lat: string;
+  lng: string;
+  placeId: string;
+  gbpLocationId: string;
+  keywords: string[];
+};
+
+type Props = { orgId: string; initialClient?: OnboardInitialClient | null };
 
 function normalizeKeyword(s: string) {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-export function OnboardClientForm({ orgId }: Props) {
-  const [clientSlug, setClientSlug] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [primaryDomain, setPrimaryDomain] = useState("");
-  const [addressText, setAddressText] = useState("");
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
-  const [placeId, setPlaceId] = useState("");
-  const [gbpLocationId, setGbpLocationId] = useState("");
+export function OnboardClientForm({ orgId, initialClient }: Props) {
+  const isEdit = Boolean(initialClient);
+
+  const [clientSlug, setClientSlug] = useState(initialClient?.clientSlug ?? "");
+  const [displayName, setDisplayName] = useState(initialClient?.displayName ?? "");
+  const [primaryDomain, setPrimaryDomain] = useState(initialClient?.primaryDomain ?? "");
+  const [addressText, setAddressText] = useState(initialClient?.addressText ?? "");
+  const [lat, setLat] = useState(initialClient?.lat ?? "");
+  const [lng, setLng] = useState(initialClient?.lng ?? "");
+  const [placeId, setPlaceId] = useState(initialClient?.placeId ?? "");
+  const [gbpLocationId, setGbpLocationId] = useState(initialClient?.gbpLocationId ?? "");
 
   const [keywordInput, setKeywordInput] = useState("");
-  const [keywordTags, setKeywordTags] = useState<string[]>([]);
+  const [keywordTags, setKeywordTags] = useState<string[]>(initialClient?.keywords ?? []);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  const [addrQuery, setAddrQuery] = useState("");
+  const [addrQuery, setAddrQuery] = useState(initialClient?.addressText ?? "");
   const [addrPredictions, setAddrPredictions] = useState<Array<{ description: string; placeId: string }>>([]);
   const [addrOpen, setAddrOpen] = useState(false);
   const [addrLoading, setAddrLoading] = useState(false);
   const [addrError, setAddrError] = useState<string | null>(null);
 
-  const [geoLoading, setGeoLoading] = useState(false);
-  const [geoError, setGeoError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   const keywordTagsRef = useRef<string[]>([]);
   keywordTagsRef.current = keywordTags;
+
+  useEffect(() => {
+    if (!initialClient) return;
+    setClientSlug(initialClient.clientSlug);
+    setDisplayName(initialClient.displayName);
+    setPrimaryDomain(initialClient.primaryDomain);
+    setAddressText(initialClient.addressText);
+    setLat(initialClient.lat);
+    setLng(initialClient.lng);
+    setPlaceId(initialClient.placeId);
+    setGbpLocationId(initialClient.gbpLocationId);
+    setKeywordTags(initialClient.keywords);
+    setAddrQuery(initialClient.addressText);
+  }, [initialClient]);
 
   const addKeyword = useCallback((raw: string) => {
     const t = raw.trim();
@@ -49,10 +77,13 @@ export function OnboardClientForm({ orgId }: Props) {
     setKeywordTags((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const moveSuggestionToKeywords = useCallback((s: string) => {
-    addKeyword(s);
-    setSuggestions((prev) => prev.filter((x) => x !== s));
-  }, [addKeyword]);
+  const moveSuggestionToKeywords = useCallback(
+    (s: string) => {
+      addKeyword(s);
+      setSuggestions((prev) => prev.filter((x) => x !== s));
+    },
+    [addKeyword],
+  );
 
   function buildSuggestionsFromPlace(locality: string | null, region: string | null) {
     const name = displayName.trim() || "business";
@@ -101,7 +132,6 @@ export function OnboardClientForm({ orgId }: Props) {
   }, [keywordTags]);
 
   useEffect(() => {
-    // Keep the address search box in sync with the actual address field.
     setAddrQuery(addressText);
   }, [addressText]);
 
@@ -148,17 +178,17 @@ export function OnboardClientForm({ orgId }: Props) {
     };
   }, [addrQuery, orgId]);
 
-  async function selectPrediction(placeId: string, description: string) {
+  async function selectPrediction(predPlaceId: string, description: string) {
     setAddrOpen(false);
     setAddrError(null);
     setAddressText(description);
     setAddrQuery(description);
-    setPlaceId(placeId);
+    setPlaceId(predPlaceId);
     try {
       const res = await fetch("/api/google/places/details", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId, placeId, language: "ro" }),
+        body: JSON.stringify({ orgId, placeId: predPlaceId, language: "ro" }),
       });
       const json = (await res.json()) as {
         formattedAddress?: string | null;
@@ -193,56 +223,70 @@ export function OnboardClientForm({ orgId }: Props) {
     setKeywordInput("");
   }
 
-  async function lookupAddress() {
-    setGeoError(null);
-    const addr = addressText.trim();
-    if (!addr) {
-      setGeoError("Enter an address first.");
-      return;
-    }
-    setGeoLoading(true);
-    try {
-      const res = await fetch("/api/onboarding/geocode-suggestions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId, address: addr, displayName: displayName.trim() }),
-      });
-      const json = (await res.json()) as {
-        lat?: number;
-        lng?: number;
-        suggestions?: string[];
-        error?: string;
-      };
-      if (!res.ok) {
-        setGeoError(json.error ?? "Could not geocode address");
-        return;
-      }
-      if (json.lat != null && json.lng != null) {
-        setLat(String(json.lat));
-        setLng(String(json.lng));
-      }
-      const sug = json.suggestions ?? [];
-      const tags = keywordTagsRef.current;
-      setSuggestions(
-        sug.filter((s) => !tags.some((k) => normalizeKeyword(k) === normalizeKeyword(s))),
-      );
-    } catch (e) {
-      setGeoError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setGeoLoading(false);
-    }
-  }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus(null);
 
     if (!lat.trim() || !lng.trim()) {
-      setStatus("Set coordinates using “Set pin from address” or enter latitude and longitude.");
+      setStatus("Choose an address from Google suggestions so latitude and longitude are set automatically.");
       return;
     }
     if (keywordTags.length === 0) {
       setStatus("Add at least one keyword (type and press Enter).");
+      return;
+    }
+
+    if (isEdit && initialClient) {
+      const clientRes = await fetch(`/api/clients/${encodeURIComponent(initialClient.clientId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          orgId,
+          displayName: displayName.trim(),
+          clientSlug: clientSlug.trim(),
+          primaryDomain: primaryDomain.trim() || null,
+        }),
+      });
+      const cj = (await clientRes.json()) as { ok?: boolean; error?: string };
+      if (!clientRes.ok || !cj.ok) {
+        setStatus(cj.error ?? "Update client failed");
+        return;
+      }
+
+      const latN = Number(lat);
+      const lngN = Number(lng);
+      const locRes = await fetch(`/api/locations/${encodeURIComponent(initialClient.locationId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          orgId,
+          addressText: addressText.trim(),
+          lat: Number.isFinite(latN) ? latN : null,
+          lng: Number.isFinite(lngN) ? lngN : null,
+          placeId: placeId.trim() || null,
+          gbpLocationId: gbpLocationId.trim() || null,
+        }),
+      });
+      const lj = (await locRes.json()) as { ok?: boolean; error?: string };
+      if (!locRes.ok || !lj.ok) {
+        setStatus(lj.error ?? "Update location failed");
+        return;
+      }
+
+      const kwRes = await fetch(`/api/clients/${encodeURIComponent(initialClient.clientId)}/keywords`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId, keywords: keywordTags }),
+      });
+      const kj = (await kwRes.json()) as { ok?: boolean; error?: string };
+      if (!kwRes.ok || !kj.ok) {
+        setStatus(kj.error ?? "Update keywords failed");
+        return;
+      }
+
+      window.location.href = `/dashboard/${encodeURIComponent(initialClient.clientId)}/${encodeURIComponent(
+        initialClient.locationId,
+      )}?org_id=${encodeURIComponent(orgId)}`;
       return;
     }
 
@@ -272,13 +316,18 @@ export function OnboardClientForm({ orgId }: Props) {
       locationId?: string;
     };
 
+    if (res.status === 409) {
+      setStatus(json.error ?? "This organization already has a client.");
+      return;
+    }
+
     if (!res.ok || !json.ok || !json.clientId || !json.locationId) {
       setStatus(json.error ?? "Onboarding failed");
       return;
     }
 
     window.location.href = `/dashboard/${encodeURIComponent(json.clientId)}/${encodeURIComponent(
-      json.locationId
+      json.locationId,
     )}?org_id=${encodeURIComponent(orgId)}`;
   }
 
@@ -326,64 +375,53 @@ export function OnboardClientForm({ orgId }: Props) {
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-0 flex-1 space-y-1">
-            <label className="text-sm font-medium">Address</label>
-            <input
-              className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
-              value={addressText}
-              onChange={(e) => {
-                setAddressText(e.target.value);
-                setAddrOpen(true);
-              }}
-              onFocus={() => setAddrOpen(true)}
-              onBlur={() => {
-                // Let click events on dropdown buttons run first
-                setTimeout(() => setAddrOpen(false), 120);
-              }}
-              placeholder="Strada Exemplu 1, București"
-              required
-            />
-            {addrOpen && (addrPredictions.length > 0 || addrLoading || addrError) ? (
-              <div className="relative">
-                <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/15 dark:bg-black">
-                  {addrLoading ? (
-                    <div className="px-3 py-2 text-sm text-black/60 dark:text-white/60">Searching…</div>
-                  ) : addrError ? (
-                    <div className="px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{addrError}</div>
-                  ) : addrPredictions.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-black/60 dark:text-white/60">No suggestions</div>
-                  ) : (
-                    <div className="max-h-64 overflow-auto">
-                      {addrPredictions.slice(0, 8).map((p) => (
-                        <button
-                          key={p.placeId}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => void selectPrediction(p.placeId, p.description)}
-                          className="block w-full px-3 py-2 text-left text-sm hover:bg-black/[.04] dark:hover:bg-white/10"
-                        >
-                          {p.description}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Address</label>
+          <input
+            className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
+            value={addressText}
+            onChange={(e) => {
+              setAddressText(e.target.value);
+              setAddrOpen(true);
+            }}
+            onFocus={() => setAddrOpen(true)}
+            onBlur={() => {
+              setTimeout(() => setAddrOpen(false), 120);
+            }}
+            placeholder="Strada Exemplu 1, București"
+            required
+          />
+          {addrOpen && (addrPredictions.length > 0 || addrLoading || addrError) ? (
+            <div className="relative">
+              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/15 dark:bg-black">
+                {addrLoading ? (
+                  <div className="px-3 py-2 text-sm text-black/60 dark:text-white/60">Searching…</div>
+                ) : addrError ? (
+                  <div className="px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{addrError}</div>
+                ) : addrPredictions.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-black/60 dark:text-white/60">No suggestions</div>
+                ) : (
+                  <div className="max-h-64 overflow-auto">
+                    {addrPredictions.slice(0, 8).map((p) => (
+                      <button
+                        key={p.placeId}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void selectPrediction(p.placeId, p.description)}
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-black/[.04] dark:hover:bg-white/10"
+                      >
+                        {p.description}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => void lookupAddress()}
-            disabled={geoLoading}
-            className="h-10 shrink-0 rounded-md border border-black/10 bg-white px-3 text-sm font-medium transition-all duration-150 hover:bg-black/[.04] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:bg-black dark:hover:bg-white/10"
-          >
-            {geoLoading ? "Looking up…" : "Set pin from address"}
-          </button>
+            </div>
+          ) : null}
         </div>
-        {geoError ? <p className="text-sm text-amber-700 dark:text-amber-300">{geoError}</p> : null}
         <p className="text-xs text-black/50 dark:text-white/50">
-          Uses OpenStreetMap Nominatim to fill latitude/longitude. Add display name before lookup for better keyword ideas.
+          Pick a Google Places result to set formatted address and coordinates. Lat/lng are filled from Places details
+          only.
         </p>
       </div>
 
@@ -394,7 +432,7 @@ export function OnboardClientForm({ orgId }: Props) {
             className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
             value={lat}
             onChange={(e) => setLat(e.target.value)}
-            placeholder="from address lookup"
+            placeholder="from Places"
             inputMode="decimal"
           />
         </div>
@@ -404,7 +442,7 @@ export function OnboardClientForm({ orgId }: Props) {
             className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
             value={lng}
             onChange={(e) => setLng(e.target.value)}
-            placeholder="from address lookup"
+            placeholder="from Places"
             inputMode="decimal"
           />
         </div>
@@ -472,7 +510,7 @@ export function OnboardClientForm({ orgId }: Props) {
         type="submit"
         className="rounded-md bg-black px-3 py-2 text-sm font-medium text-white transition-all duration-150 ease-out hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 dark:bg-white dark:text-black dark:focus-visible:ring-white/30"
       >
-        Create client + location
+        {isEdit ? "Save client + location" : "Create client + location"}
       </button>
     </form>
   );

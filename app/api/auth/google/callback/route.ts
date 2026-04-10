@@ -119,5 +119,5 @@ export async function GET(request: Request) {
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
   }
 
-  return NextResponse.redirect(new URL(`/org?org_id=${encodeURIComponent(orgId)}`, url.origin))
+  return NextResponse.redirect(new URL(`/app?org_id=${encodeURIComponent(orgId)}`, url.origin))
 }

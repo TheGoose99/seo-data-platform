@@ -47,6 +47,8 @@ type Props = {
   keywords: KeywordRow[];
   canEdit: boolean;
   canDelete: boolean;
+  /** When set, redirect here after successful delete instead of legacy /clients. */
+  afterDeleteHref?: string;
 };
 
 function cleanCoord(v: number | null): number | null {
@@ -56,7 +58,7 @@ function cleanCoord(v: number | null): number | null {
 
 export function ClientDetailPanel(props: Props) {
   const router = useRouter();
-  const { orgId, client, canEdit, canDelete } = props;
+  const { orgId, client, canEdit, canDelete, afterDeleteHref } = props;
 
   const [displayName, setDisplayName] = useState(client.display_name);
   const [clientSlug, setClientSlug] = useState(client.client_slug);
@@ -138,7 +140,7 @@ export function ClientDetailPanel(props: Props) {
         setClientStatus(json.error ?? "Delete failed");
         return;
       }
-      window.location.href = `/clients?org_id=${encodeURIComponent(orgId)}`;
+      window.location.href = afterDeleteHref ?? `/clients?org_id=${encodeURIComponent(orgId)}`;
     } catch (e) {
       setClientStatus(e instanceof Error ? e.message : String(e));
     } finally {

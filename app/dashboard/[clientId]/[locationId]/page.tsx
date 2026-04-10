@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
-import { canMutateOrgData } from '@/lib/rbac/server'
+import { canAccessCloseByAdminApp, canMutateOrgData } from '@/lib/rbac/server'
 import { RunIngestButton } from '@/components/dashboard/run-ingest-button'
 import { HeatmapQueryPanel } from '@/components/dashboard/heatmap-query-panel'
 
@@ -43,12 +43,16 @@ export default async function DashboardPage(props: {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  if (!(await canAccessCloseByAdminApp(supabase, user.id))) {
+    redirect('/access-denied')
+  }
+
   const { data: client } = await supabase
     .from('clients')
     .select('id,org_id,display_name,client_slug')
     .eq('id', clientId)
     .maybeSingle()
-  if (!client) redirect('/org')
+  if (!client) redirect('/app')
 
   const canRunIngest = await canMutateOrgData(supabase, client.org_id, user.id)
 
@@ -57,7 +61,7 @@ export default async function DashboardPage(props: {
     .select('id,address_text,lat,lng')
     .eq('id', locationId)
     .maybeSingle()
-  if (!location) redirect('/org')
+  if (!location) redirect('/app')
 
   const { data: keywordsRaw } = await supabase
     .from('keywords')
@@ -151,8 +155,8 @@ export default async function DashboardPage(props: {
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
       <div className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <Link href={`/org?org_id=${encodeURIComponent(client.org_id)}`} className="text-sm underline underline-offset-4">
-            Back to org
+          <Link href={`/app?org_id=${encodeURIComponent(client.org_id)}`} className="text-sm underline underline-offset-4">
+            Back to admin
           </Link>
           <h1 className="mt-2 text-2xl font-semibold">{client.display_name}</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">{location.address_text}</p>

@@ -1,14 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/** Owner or admin of the platform operator org (CloseBy). */
-export async function isPlatformOperatorAdmin(supabase: SupabaseClient, userId: string): Promise<boolean> {
+/** Platform operator org id (e.g. CloseBy), or null if not configured. */
+export async function getOperatorOrgId(supabase: SupabaseClient): Promise<string | null> {
   const { data: op } = await supabase
     .from('organizations')
     .select('id')
     .eq('is_platform_operator', true)
     .maybeSingle()
+  return (op?.id as string | undefined) ?? null
+}
 
-  const operatorOrgId = op?.id as string | undefined
+/** Owner or admin of the platform operator org (CloseBy). */
+export async function isPlatformOperatorAdmin(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  const operatorOrgId = await getOperatorOrgId(supabase)
   if (!operatorOrgId) return false
 
   const { data: m } = await supabase
@@ -19,6 +23,11 @@ export async function isPlatformOperatorAdmin(supabase: SupabaseClient, userId: 
     .maybeSingle()
 
   return Boolean(m && (m.role === 'owner' || m.role === 'admin'))
+}
+
+/** This Next.js app is restricted to CloseBy platform admins only. */
+export async function canAccessCloseByAdminApp(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  return isPlatformOperatorAdmin(supabase, userId)
 }
 
 export async function getOrgMembershipRole(

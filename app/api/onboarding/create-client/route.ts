@@ -44,6 +44,14 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient()
 
+  const { data: existingClient } = await admin.from('clients').select('id').eq('org_id', body.orgId).maybeSingle()
+  if (existingClient) {
+    return NextResponse.json(
+      { error: 'This organization already has a client. Use edit on the client record or update via the admin console.' },
+      { status: 409 },
+    )
+  }
+
   const { data: client, error: clientErr } = await admin
     .from('clients')
     .insert({

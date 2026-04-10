@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { canEditOrgBusinessData } from '@/lib/api/org-admin'
+import { canMutateOrgData } from '@/lib/api/org-admin'
 import { addressHash } from '@/lib/clients/text'
 import { patchLocationBody } from '@/lib/validation/api'
 import { zodErrorMessage } from '@/lib/validation/parse'
@@ -29,7 +29,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ locationI
   const body = parsed.data
   const orgId = body.orgId
 
-  if (!(await canEditOrgBusinessData(supabase, orgId, user.id))) {
+  if (!(await canMutateOrgData(supabase, orgId, user.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

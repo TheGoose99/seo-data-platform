@@ -26,6 +26,9 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
    Apply the schema in the Supabase SQL editor:
 
    - [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
+   - Later migrations in order (e.g. [`0005_clients_one_per_org.sql`](supabase/migrations/0005_clients_one_per_org.sql)).
+
+   **Migration 0005** adds a unique index on `clients(org_id)` (one client per organization). Apply it only when there are **no duplicate `org_id` rows** in `clients`; dedupe first or the migration will fail.
 
    See [`supabase/README.md`](supabase/README.md) for notes on RLS and the service role.
 
@@ -35,7 +38,7 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
    npm run dev
    ```
 
-   Open `/login`, then `/org` → onboard a client → open the dashboard and run ingestion when APIs are configured.
+   Open `/login`, then `/app` → create an org (optional) → onboard a client → open the dashboard and run ingestion when APIs are configured.
 
 ## Deploy (Vercel)
 

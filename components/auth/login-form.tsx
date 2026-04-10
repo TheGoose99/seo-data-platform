@@ -14,7 +14,6 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [status, setStatus] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -27,17 +26,17 @@ export function LoginForm() {
     const submittedPassword = String(fd.get("password") ?? "");
 
     const supabase = createClient();
-    const { error } =
-      mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email: submittedEmail, password: submittedPassword })
-        : await supabase.auth.signUp({ email: submittedEmail, password: submittedPassword });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: submittedEmail,
+      password: submittedPassword,
+    });
     if (error) {
       setStatus(error.message);
       return;
     }
 
     const next = safeNextPath(searchParams.get("next"));
-    window.location.href = next ?? "/org";
+    window.location.href = next ?? "/app";
   }
 
   return (
@@ -64,7 +63,7 @@ export function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           type="password"
           required
-          autoComplete={mode === "signin" ? "current-password" : "new-password"}
+          autoComplete="current-password"
         />
       </div>
 
@@ -76,15 +75,7 @@ export function LoginForm() {
         type="submit"
         className="w-full rounded-md bg-black px-3 py-2 text-sm font-medium text-white transition-all duration-150 ease-out hover:bg-black/90 hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 dark:bg-white dark:text-black dark:hover:bg-white/90 dark:focus-visible:ring-white/30"
       >
-        {mode === "signin" ? "Sign in" : "Create account"}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-        className="w-full rounded-md border border-black/10 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-black/[.04] hover:shadow-sm hover:-translate-y-px active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:border-white/15 dark:hover:bg-white/10 dark:focus-visible:ring-white/20"
-      >
-        {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
+        Sign in
       </button>
     </form>
   );
