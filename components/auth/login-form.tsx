@@ -13,11 +13,16 @@ export function LoginForm() {
     e.preventDefault();
     setStatus(null);
 
+    const form = e.currentTarget as HTMLFormElement;
+    const fd = new FormData(form);
+    const submittedEmail = String(fd.get("email") ?? "").trim();
+    const submittedPassword = String(fd.get("password") ?? "");
+
     const supabase = createClient();
     const { error } =
       mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        ? await supabase.auth.signInWithPassword({ email: submittedEmail, password: submittedPassword })
+        : await supabase.auth.signUp({ email: submittedEmail, password: submittedPassword });
     if (error) {
       setStatus(error.message);
       return;
@@ -32,6 +37,7 @@ export function LoginForm() {
         <label className="text-sm font-medium">Email</label>
         <input
           className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
+          name="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           type="email"
@@ -44,6 +50,7 @@ export function LoginForm() {
         <label className="text-sm font-medium">Password</label>
         <input
           className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
+          name="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           type="password"
