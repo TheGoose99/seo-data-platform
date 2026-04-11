@@ -1,0 +1,35 @@
+{
+  "name": "Dr. Example Minimal",
+  "shortName": "Example Minimal",
+  "city": "Cluj-Napoca",
+  "sector": "Centru",
+  "language": "ro",
+  "formality": "dumneavoastra",
+  "mode": "in-person",
+  "address": "Exemplu: stradă și reper — înlocuiește cu date reale",
+  "hours": "Marți–Joi 10:00–19:00",
+  "languages": ["ro", "en"],
+  "personality": {
+    "summary": "Stil laconic, respectos, puține cuvinte inutile. Preferă frame-uri precise și întrebări scurte. Nu explică emoțiile în metafore lungi.",
+    "traits": ["sobră", "precisă", "discretă"],
+    "tone": "minimal_precise",
+    "voiceNotes": "Fraze scurte. Fără exclamații. CTAs neutre: „Programare”, „Detalii”.",
+    "differentiators": ["Evaluări scrise la cerere", "Supervizare continuă"],
+    "avoid": ["hai să îți schimbăm viața", "călătorie minunată"],
+    "layoutVibe": "calm_minimal"
+  },
+  "services": [{ "name": "Psihoterapie", "description": "Adulți" }],
+  "therapists": [
+    {
+      "name": "Dr. Example Minimal",
+      "specializations": ["TCC"],
+      "yearsOfExperience": 12
+    }
+  ],
+  "seoKeywordCandidates": [
+    { "keyword": "psiholog cluj centru", "intent": "local" },
+    { "keyword": "terapie tcc cluj", "intent": "local" },
+    { "keyword": "psihoterapeut adulti cluj", "intent": "transactional" },
+    { "keyword": "cabinet psihologie cluj", "intent": "local" }
+  ]
+}

@@ -7,22 +7,33 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test"
+    "test": "node --test",
+    "template:zip": "node scripting/website/build-template-zip.mjs",
+    "template:run": "node scripting/website/run-template-pipeline.mjs",
+    "generate:toon": "tsx scripting/website/generation/run-with-toon.ts",
+    "generate:toon:test-cal": "tsx scripting/website/generation/run-with-toon.ts --dry-run --verbose --client-id=1f2865c5-6bec-41fc-9980-a229e5aba473 scripting/website/templates/toon.example.json",
+    "generate:toon:compare5": "node scripting/website/generation/run-five-api-compare.mjs",
+    "onboard:client": "node scripting/onboard-client.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
+    "@toon-format/toon": "^2.1.0",
     "lucide-react": "^1.8.0",
+    "mongodb": "^6.21.0",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zod-to-json-schema": "^3.25.2",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",

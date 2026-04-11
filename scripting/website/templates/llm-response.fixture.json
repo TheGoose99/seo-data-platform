@@ -1,0 +1,71 @@
+{
+  "layout": {
+    "header": "a",
+    "hero": "a",
+    "proof": "a",
+    "about": "a",
+    "services": "a",
+    "reviews": "a",
+    "faq": "a",
+    "location": "a",
+    "gallery": "a"
+  },
+  "seo": {
+    "metaTitle": "Psiholog Sector 3 București | Cabinet Demo | CBT",
+    "metaDescription": "Cabinet de psihologie în Sector 3, București. Terapie cognitiv-comportamentală, programări online. Propoziție scurtă pentru test validare.",
+    "keywords": [
+      "psiholog sector 3 bucuresti",
+      "terapie cbt sector 3",
+      "cabinet psihologie bucuresti",
+      "psihoterapeut anxietate"
+    ]
+  },
+  "content": {
+    "heroTitle": "Regăsește",
+    "heroTitleAccent": "calmul",
+    "heroSubtitle": "Psihoterapie pentru adulți în București, Sector 3. Spațiu sigur, pași clari.",
+    "heroCta": "Programează o consultație",
+    "heroCtaSecondary": "Află mai multe",
+    "heroAvailability": "Sector 3 · București · Online și la cabinet",
+    "aboutTitle": "Despre cabinet",
+    "aboutEyebrow": "Despre noi",
+    "aboutTitleLead": "Suntem alături de tine de",
+    "aboutTitleLine2": "pe drumul schimbării",
+    "aboutPullQuote": "„Schimbarea începe cu un pas mic — îl facem împreună.”",
+    "servicesTitle": "Servicii",
+    "servicesSubtitle": "Abordare adaptată nevoilor tale.",
+    "faqTitle": "Întrebări frecvente",
+    "faqEyebrow": "FAQ",
+    "faqSidebarLead": "Ai o altă",
+    "faqSidebarEmphasis": "întrebare?",
+    "faqSidebarSubtitle": "Scrie-ne și revenim în 24h.",
+    "reviewsTitle": "Recenzii",
+    "galleryTitle": "Galerie",
+    "gallerySubtitle": "Spațiu liniștit pentru ședințe.",
+    "locationSaturdayNote": "Sâmbătă: doar online",
+    "heroBadgeFreeSession": "Prima consultație gratuită",
+    "heroChips": ["Anxietate", "Depresie", "CBT", "Online"]
+  },
+  "faqs": [
+    {
+      "question": "Cât durează o ședință?",
+      "answer": "Ședința standard are 50 de minute; prima consultație poate fi mai scurtă, în funcție de acord."
+    },
+    {
+      "question": "Unde este cabinetul în București?",
+      "answer": "În Sectorul 3, cu acces facil la transport public; detaliile exacte le primești la programare."
+    },
+    {
+      "question": "Oferiți și online?",
+      "answer": "Da, ședințe online sigure, cu aceeași confidențialitate ca la cabinet."
+    },
+    {
+      "question": "Este confidențial?",
+      "answer": "Da, respectăm Codul deontologic și GDPR."
+    },
+    {
+      "question": "Cum mă programez?",
+      "answer": "Poți folosi formularul de contact sau telefonul afișat pe site."
+    }
+  ]
+}

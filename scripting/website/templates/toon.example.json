@@ -1,0 +1,59 @@
+{
+  "name": "Dr. Ana Ionescu",
+  "shortName": "Ana Ionescu",
+  "city": "București",
+  "sector": "Sector 3",
+  "language": "ro",
+  "formality": "tu",
+  "mode": "both",
+  "address": "Bd. Theodor Pallady, nr. 24 — zona Pallady, Sector 3 (reper metrou Anghel Saligny)",
+  "hours": "Luni–Vineri 09:00–18:00",
+  "languages": ["ro"],
+  "personality": {
+    "summary": "Lucrează structurat, cu calm și curiozitate autentică. Pune accent pe claritate și pe pași mici, verificabili — fără promisiuni goale. În cameră e prezentă, ancorată, uneori cu o urmă de umor blând când tensiunea e mare.",
+    "traits": [
+      "structurată",
+      "empatică",
+      "directă fără să fie rece",
+      "ancorată în CBT"
+    ],
+    "tone": "warm_clinical",
+    "voiceNotes": "Propoziții clare, puține adjective goale. Preferă „pași”, „experimente între ședințe”, „ce observi între sesiuni”. Evită limbajul tip panou publicitar.",
+    "differentiators": [
+      "CBT cu feedback concret între ședințe",
+      "Spațiu liniștit lângă metrou Anghel Saligny"
+    ],
+    "avoid": [
+      "vindecare garantată",
+      "cel mai bun psiholog din București",
+      "transformare radicală în X ședințe"
+    ],
+    "layoutVibe": "balanced"
+  },
+  "services": [
+    { "name": "Consultație inițială", "description": "Prima întâlnire pentru evaluare" },
+    { "name": "Psihoterapie individuală", "description": "CBT pentru anxietate și depresie" },
+    { "name": "Ședințe online", "description": "Video sigur, aceeași confidențialitate" }
+  ],
+  "therapists": [
+    {
+      "name": "Dr. Ana Ionescu",
+      "specializations": ["CBT", "anxietate", "depresie"],
+      "credentials": ["Psiholog clinician specialist", "Psihoterapeut acreditat"],
+      "yearsOfExperience": 8
+    }
+  ],
+  "seoKeywordCandidates": [
+    { "keyword": "psiholog sector 3 bucuresti", "volume": 1200, "intent": "local" },
+    { "keyword": "terapie cbt pallady", "volume": 400, "intent": "local" },
+    { "keyword": "cabinet psihologie langa metrou", "volume": 600, "intent": "local" },
+    { "keyword": "psihoterapeut anxietate bucuresti", "volume": 900, "intent": "transactional" }
+  ],
+  "layoutOverride": {
+    "hero": "b",
+    "faq": "a"
+  },
+  "sourceNotes": {
+    "googleMapsReferenceUrl": ""
+  }
+}

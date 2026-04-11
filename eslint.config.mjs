@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "tests/**",
+    // Onboarding unzips + npm ci here; do not lint generated .next / node_modules
+    "scripting/website/workspace/**",
+    "scripting/website/.template-staging/**",
   ]),
 ]);
 

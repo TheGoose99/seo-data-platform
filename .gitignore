@@ -37,5 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# website template pipeline (generated; zip is committed under scripting/templates/)
+/scripting/website/workspace/
+/scripting/website/.template-staging/
+/scripting/website/templates/website-app-template.zip
+
 # typescript
 *.tsbuildinfo

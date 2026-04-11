@@ -1,0 +1,37 @@
+name: Dr. Ana Ionescu
+shortName: Ana Ionescu
+city: București
+sector: Sector 3
+language: ro
+formality: tu
+services[3]{name,description}:
+  Consultație inițială,Prima întâlnire pentru evaluare
+  Psihoterapie individuală,CBT pentru anxietate și depresie
+  Ședințe online,"Video sigur, aceeași confidențialitate"
+therapists[1]:
+  - name: Dr. Ana Ionescu
+    specializations[3]: CBT,anxietate,depresie
+    credentials[2]: Psiholog clinician specialist,Psihoterapeut acreditat
+    yearsOfExperience: 8
+personality:
+  summary: "Lucrează structurat, cu calm și curiozitate autentică. Pune accent pe claritate și pe pași mici, verificabili — fără promisiuni goale. În cameră e prezentă, ancorată, uneori cu o urmă de umor blând când tensiunea e mare."
+  traits[4]: structurată,empatică,directă fără să fie rece,ancorată în CBT
+  tone: warm_clinical
+  voiceNotes: "Propoziții clare, puține adjective goale. Preferă „pași”, „experimente între ședințe”, „ce observi între sesiuni”. Evită limbajul tip panou publicitar."
+  differentiators[2]: CBT cu feedback concret între ședințe,Spațiu liniștit lângă metrou Anghel Saligny
+  avoid[3]: vindecare garantată,cel mai bun psiholog din București,transformare radicală în X ședințe
+  layoutVibe: balanced
+address: "Bd. Theodor Pallady, nr. 24 — zona Pallady, Sector 3 (reper metrou Anghel Saligny)"
+hours: "Luni–Vineri 09:00–18:00"
+mode: both
+languages[1]: ro
+seoKeywordCandidates[4]{keyword,volume,intent}:
+  psiholog sector 3 bucuresti,1200,local
+  terapie cbt pallady,400,local
+  cabinet psihologie langa metrou,600,local
+  psihoterapeut anxietate bucuresti,900,transactional
+layoutOverride:
+  hero: b
+  faq: a
+sourceNotes:
+  googleMapsReferenceUrl: ""
