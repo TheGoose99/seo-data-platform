@@ -8,6 +8,7 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
 - **Supabase** (Auth + Postgres + RLS)
 - **Google OAuth** (offline refresh tokens, encrypted at rest)
 - **DataForSEO** (Maps / local grid)
+- **Cal.com** (booking) + **Meta WhatsApp Cloud API** (no-reply booking updates)
 
 ## Local setup
 
@@ -23,10 +24,10 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
 
 3. **Database**
 
-   Apply the schema in the Supabase SQL editor:
+   Apply the schema in the Supabase SQL editor (in order):
 
    - [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   - Later migrations in order (e.g. [`0005_clients_one_per_org.sql`](supabase/migrations/0005_clients_one_per_org.sql)).
+   - Then `0002` → latest (see `supabase/migrations/`).
 
    **Migration 0005** adds a unique index on `clients(org_id)` (one client per organization). Apply it only when there are **no duplicate `org_id` rows** in `clients`; dedupe first or the migration will fail.
 
@@ -39,6 +40,19 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
    ```
 
    Open `/login`, then `/app` → create an org (optional) → onboard a client → open the dashboard and run ingestion when APIs are configured.
+
+## Internal onboarding (psychologist cabinets)
+
+This repo now includes an **internal (team-only) onboarding intake** for psychologist cabinets. It is **debug-only** today:
+
+- **Form**: `/clients/new?org_id=<uuid>` (multi-step, Google Places address, services w/ duration + price, specialties, working hours, Cal.com + GBP, website options, media uploads w/ client-side resizing).
+- **Server validation**: `POST /api/onboarding/intake/validate` (RBAC + masked secrets).
+- **Operator tools**: `/app/tools` (copy/paste commands, ingestion runner placeholders, payload validation).
+
+### Operator UX rules
+
+- Prefer **derived defaults** from existing inputs (location/services/specialties/Cal username).
+- Keep manual overrides behind **“Operator advanced”** where possible.
 
 ## Deploy (Vercel)
 
@@ -55,6 +69,15 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
 | `npm run start`| Start production server |
 | `npm run lint` | ESLint         |
 | `npm test`     | Node test runner (`tests/`) |
+
+## Next step: intake → pipeline
+
+The intended next stage is to turn the final debug payload into a real onboarding pipeline:
+
+- **Supabase persistence**: store the intake payload + processing state (and create/update `clients`, `locations`, `org_integrations`).
+- **DataForSEO**: generate/expand keywords (seed → full list) and store results.
+- **Claude API**: generate site copy (RO/RO+EN) + structured content blocks.
+- **Website provisioning**: generate config, create/update GitHub repo, deploy on Vercel, persist `clients.website_deploy_url`.
 
 ## Development status (Phase 1)
 

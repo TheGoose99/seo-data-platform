@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Image from 'next/image'
 import { onboardingIntakeSchema, type OnboardingIntake } from '@/lib/validation/onboarding-intake'
 import { matchRomanianCounty } from '@/lib/romania/counties'
 import { normalizeClientSlug } from '@/lib/clients/text'
@@ -8,6 +9,17 @@ import { normalizeClientSlug } from '@/lib/clients/text'
 type Props = { orgId: string }
 
 type Prediction = { description: string; placeId: string }
+
+function toSlug(s: string) {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 80)
+}
 
 const PRESET_SERVICES: Array<{ name: string; durationMinutes: number }> = [
   { name: 'Terapie individuală', durationMinutes: 50 },
@@ -50,7 +62,33 @@ function parseSeedKeywords(raw: string) {
     .slice(0, 30)
 }
 
+function normalizePhoneInput(raw: string) {
+  // Keep common phone chars only; disallow letters.
+  return raw.replace(/[^0-9+\s()\-]/g, '')
+}
+
+function generateSeedKeywords(opts: { locality?: string | null; county?: string | null }) {
+  const loc = (opts.locality ?? '').trim()
+  const county = (opts.county ?? '').trim()
+  const place = loc || county
+  const suffix = place ? ` ${place}` : ''
+  const base = [
+    `psiholog${suffix}`,
+    `psihoterapeut${suffix}`,
+    `cabinet psihologie${suffix}`,
+    `terapie${suffix}`,
+    `terapie anxietate${suffix}`,
+    `terapie depresie${suffix}`,
+    `terapie cuplu${suffix}`,
+    `psiholog copii${suffix}`,
+    `psiholog programari${suffix}`,
+    `psiholog pret${suffix}`,
+  ]
+  return base
+}
+
 export function PsychologistIntakeForm({ orgId }: Props) {
+  const [operatorAdvanced, setOperatorAdvanced] = useState(false)
   const [step, setStep] = useState(1)
   const [status, setStatus] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -81,6 +119,55 @@ export function PsychologistIntakeForm({ orgId }: Props) {
   const [domain, setDomain] = useState('')
   const [wantsDomainMigration, setWantsDomainMigration] = useState(false)
   const [dnsAccessAvailable, setDnsAccessAvailable] = useState<boolean>(false)
+  const [wantsWebsite, setWantsWebsite] = useState(true)
+
+  const [openingHours, setOpeningHours] = useState<
+    Array<{
+      dayOfWeek: Array<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'>
+      opens: string
+      closes: string
+    }>
+  >([{ dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], opens: '09:00', closes: '18:00' }])
+
+  const [heroImage, setHeroImage] = useState<File | null>(null)
+  const [galleryImages, setGalleryImages] = useState<File[]>([])
+  const [heroPreviewUrl, setHeroPreviewUrl] = useState<string | null>(null)
+  const [galleryPreviewUrls, setGalleryPreviewUrls] = useState<string[]>([])
+
+  const [paymentMethods, setPaymentMethods] = useState<Array<'cash' | 'bank_transfer' | 'card' | 'revolut' | 'insurance'>>(
+    ['cash', 'bank_transfer'],
+  )
+  const [cancellationPolicy, setCancellationPolicy] = useState(
+    'Anulările/reprogramările se fac cu minim 24h înainte. Pentru ședințele neanunțate, ne rezervăm dreptul să percepem contravaloarea.',
+  )
+  const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState('')
+  const [nearbyTransportRaw, setNearbyTransportRaw] = useState('')
+  const [parkingNotes, setParkingNotes] = useState('')
+  const [faqs, setFaqs] = useState<
+    Array<{ question: string; answer: string }>
+  >([
+    {
+      question: 'Cât durează o ședință?',
+      answer: 'O ședință standard durează 50 minute (poate varia în funcție de serviciu).',
+    },
+    {
+      question: 'Cum se face programarea?',
+      answer: 'Programarea se poate face online (Cal.com) sau telefonic. Confirmarea se trimite automat.',
+    },
+    {
+      question: 'Care este politica de anulare?',
+      answer: 'Reprogramările/anulările se fac cu minim 24h înainte.',
+    },
+  ])
+
+  const [gbpPrimaryCategory, setGbpPrimaryCategory] = useState('Psiholog')
+  const [gbpAdditionalCategoriesRaw, setGbpAdditionalCategoriesRaw] = useState('')
+  const [gbpDescription, setGbpDescription] = useState('')
+  const [gbpAttributesRaw, setGbpAttributesRaw] = useState('Programări online, Consiliere psihologică')
+
+  const [calAppointmentUrlOverride, setCalAppointmentUrlOverride] = useState('')
+  const [calServiceSlugs, setCalServiceSlugs] = useState<Record<string, string>>({})
+  const [calMeetingModes, setCalMeetingModes] = useState<Record<string, 'in_person' | 'online' | 'both'>>({})
 
   const [services, setServices] = useState<Array<{ name: string; durationMinutes?: number; priceRon: number | null }>>(
     [],
@@ -92,13 +179,16 @@ export function PsychologistIntakeForm({ orgId }: Props) {
   const [specialties, setSpecialties] = useState<string[]>([])
   const [customSpecialty, setCustomSpecialty] = useState('')
 
-  const [automationMode, setAutomationMode] = useState<'passive' | 'whatsapp' | 'calcom'>('passive')
+  const [useWhatsapp, setUseWhatsapp] = useState(false)
+  const [useCalcom, setUseCalcom] = useState(false)
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [calUsername, setCalUsername] = useState('')
   const [calApiKey, setCalApiKey] = useState('')
   const [revealCalKey, setRevealCalKey] = useState(false)
 
   const [clientGoogleAccountEmail, setClientGoogleAccountEmail] = useState('')
+  const [gbpHasGoogleAccount, setGbpHasGoogleAccount] = useState<'yes' | 'no' | 'unknown'>('unknown')
+  const [gbpAccessMethod, setGbpAccessMethod] = useState<'client_invite' | 'we_request' | 'unknown'>('unknown')
   const [profileExists, setProfileExists] = useState<boolean>(true)
   const [profileClaimed, setProfileClaimed] = useState<boolean>(true)
   const [gbpMapsUrl, setGbpMapsUrl] = useState('')
@@ -109,6 +199,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
 
   const [seedKeywordsRaw, setSeedKeywordsRaw] = useState('')
   const [keywordsApproved, setKeywordsApproved] = useState(false)
+  const [seedKeywordsDirty, setSeedKeywordsDirty] = useState(false)
 
   function parseLegalType(v: string): 'CIP' | 'SRL' | 'CLINICA' | '' {
     if (v === 'CIP' || v === 'SRL' || v === 'CLINICA') return v
@@ -123,6 +214,149 @@ export function PsychologistIntakeForm({ orgId }: Props) {
     if (v === 'postcard' || v === 'phone' || v === 'video') return v
     return 'unknown'
   }
+
+  async function resizeImageFile(
+    file: File,
+    opts: { maxWidth: number; maxHeight: number; quality: number; outType?: 'image/jpeg' | 'image/webp' } = {
+      maxWidth: 1600,
+      maxHeight: 1600,
+      quality: 0.85,
+      outType: 'image/jpeg',
+    },
+  ): Promise<File> {
+    const outType = opts.outType ?? 'image/jpeg'
+    try {
+      const bitmap = await createImageBitmap(file)
+      const scale = Math.min(1, opts.maxWidth / bitmap.width, opts.maxHeight / bitmap.height)
+      const w = Math.max(1, Math.round(bitmap.width * scale))
+      const h = Math.max(1, Math.round(bitmap.height * scale))
+
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return file
+      ctx.drawImage(bitmap, 0, 0, w, h)
+
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), outType, opts.quality),
+      )
+      if (!blob) return file
+
+      const base = file.name.replace(/\.[^/.]+$/, '')
+      const ext = outType === 'image/webp' ? 'webp' : 'jpg'
+      return new File([blob], `${base}.optimized.${ext}`, { type: outType, lastModified: Date.now() })
+    } catch {
+      return file
+    }
+  }
+
+  useEffect(() => {
+    if (heroPreviewUrl) URL.revokeObjectURL(heroPreviewUrl)
+    if (!heroImage) {
+      setHeroPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(heroImage)
+    setHeroPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heroImage])
+
+  useEffect(() => {
+    for (const u of galleryPreviewUrls) URL.revokeObjectURL(u)
+    if (!galleryImages.length) {
+      setGalleryPreviewUrls([])
+      return
+    }
+    const urls = galleryImages.map((f) => URL.createObjectURL(f))
+    setGalleryPreviewUrls(urls)
+    return () => {
+      for (const u of urls) URL.revokeObjectURL(u)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryImages])
+
+  const derivedCalAppointmentUrl = useMemo(() => {
+    const u = calUsername.trim()
+    if (!u) return undefined
+    return `https://cal.com/${u}`
+  }, [calUsername])
+
+  const derivedGbpDescription = useMemo(() => {
+    const loc = [locality?.trim(), county?.trim()].filter(Boolean).join(', ')
+    const base = displayName.trim() || 'Cabinet'
+    const specialtiesShort = specialties.slice(0, 4).join(', ')
+    const tail = specialtiesShort ? `Specializări: ${specialtiesShort}.` : ''
+    const where = loc ? `În ${loc}.` : ''
+    const appt = derivedCalAppointmentUrl ? `Programări: ${derivedCalAppointmentUrl}.` : ''
+    return `${base}. ${where} ${tail} ${appt}`.replace(/\s+/g, ' ').trim().slice(0, 750)
+  }, [county, derivedCalAppointmentUrl, displayName, locality, specialties])
+
+  const derivedGbpAdditionalCategories = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of specialties.map((x) => x.toLowerCase())) {
+      if (s.includes('terapie')) set.add('Psihoterapeut')
+      if (s.includes('cuplu')) set.add('Terapie de cuplu')
+      if (s.includes('adhd')) set.add('Psiholog clinician')
+      if (s.includes('traum')) set.add('Consilier psihologic')
+      if (s.includes('anx')) set.add('Consilier psihologic')
+      if (s.includes('depres')) set.add('Consilier psihologic')
+      if (s.includes('copii') || s.includes('adolescent')) set.add('Psiholog')
+    }
+    // keep short and safe
+    return Array.from(set).slice(0, 3)
+  }, [specialties])
+
+  const derivedGbpAttributes = useMemo(() => {
+    const set = new Set<string>()
+    if (useCalcom) set.add('Programări online')
+    if (services.some((s) => s.name.toLowerCase().includes('online'))) set.add('Ședințe online')
+    set.add('Confidențialitate')
+    return Array.from(set).slice(0, 8)
+  }, [services, useCalcom])
+
+  useEffect(() => {
+    // Default-fill once, still editable.
+    if (!gbpDescription.trim() && derivedGbpDescription) setGbpDescription(derivedGbpDescription)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedGbpDescription])
+
+  useEffect(() => {
+    if (!gbpAdditionalCategoriesRaw.trim() && derivedGbpAdditionalCategories.length) {
+      setGbpAdditionalCategoriesRaw(derivedGbpAdditionalCategories.join(', '))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedGbpAdditionalCategories])
+
+  useEffect(() => {
+    if (!gbpAttributesRaw.trim() && derivedGbpAttributes.length) setGbpAttributesRaw(derivedGbpAttributes.join(', '))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedGbpAttributes])
+
+  useEffect(() => {
+    // Keep Cal event slugs/modes in sync with selected services (non-destructive).
+    setCalServiceSlugs((prev) => {
+      const next: Record<string, string> = { ...prev }
+      for (const s of services) {
+        if (!next[s.name]) next[s.name] = toSlug(s.name)
+      }
+      for (const k of Object.keys(next)) {
+        if (!services.some((s) => s.name === k)) delete next[k]
+      }
+      return next
+    })
+    setCalMeetingModes((prev) => {
+      const next: Record<string, 'in_person' | 'online' | 'both'> = { ...prev }
+      for (const s of services) {
+        if (!next[s.name]) next[s.name] = 'both'
+      }
+      for (const k of Object.keys(next)) {
+        if (!services.some((s) => s.name === k)) delete next[k]
+      }
+      return next
+    })
+  }, [services])
 
   const intake: OnboardingIntake = useMemo(
     () => ({
@@ -145,6 +379,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
         locality: locality ?? undefined,
       },
       website: {
+        wantsWebsite,
         languageMode,
         otherLanguagesNotes: otherLanguagesNotes.trim() ? otherLanguagesNotes.trim() : undefined,
         hasOldWebsite,
@@ -153,22 +388,41 @@ export function PsychologistIntakeForm({ orgId }: Props) {
         wantsDomainMigration,
         dnsAccessAvailable,
       },
+      availability: { openingHours },
+      media: {
+        heroImageName: heroImage ? heroImage.name : undefined,
+        galleryImageNames: galleryImages.map((f) => f.name).slice(0, 3),
+      },
       services: services
         .filter((s) => s.name.trim())
         .map((s) => ({
           name: s.name.trim(),
           durationMinutes: s.durationMinutes,
-          priceRon: s.priceRon ?? Number.NaN,
+          priceRon: s.priceRon,
         })),
       specialties,
       automation: {
-        mode: automationMode,
+        useWhatsapp,
+        useCalcom,
         whatsappNumber: whatsappNumber.trim() ? whatsappNumber.trim() : undefined,
         calUsername: calUsername.trim() ? calUsername.trim() : undefined,
         calApiKey: calApiKey.trim() ? calApiKey.trim() : undefined,
         timezone: 'Europe/Bucharest',
       },
+      calcom: {
+        appointmentUrl: (calAppointmentUrlOverride.trim() ? calAppointmentUrlOverride.trim() : derivedCalAppointmentUrl) ?? undefined,
+        serviceEventSlugs: services.map((s) => ({
+          serviceName: s.name,
+          eventSlug: calServiceSlugs[s.name] || toSlug(s.name),
+        })),
+        meetingModeByService: services.map((s) => ({
+          serviceName: s.name,
+          mode: calMeetingModes[s.name] || 'both',
+        })),
+      },
       gbp: {
+        hasGoogleAccount: gbpHasGoogleAccount,
+        accessMethod: gbpAccessMethod,
         clientGoogleAccountEmail: clientGoogleAccountEmail.trim() ? clientGoogleAccountEmail.trim() : undefined,
         profileExists,
         profileClaimed: profileExists ? profileClaimed : undefined,
@@ -176,6 +430,31 @@ export function PsychologistIntakeForm({ orgId }: Props) {
         placeId: placeId.trim() ? placeId.trim() : undefined,
         operatorAccessEmail: gbpOperatorEmail.trim() ? gbpOperatorEmail.trim() : undefined,
         verificationExpected: gbpVerificationExpected,
+        primaryCategory: gbpPrimaryCategory.trim() || 'Psiholog',
+        additionalCategories: gbpAdditionalCategoriesRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 5),
+        description: gbpDescription.trim() ? gbpDescription.trim() : undefined,
+        appointmentUrl: derivedCalAppointmentUrl ? derivedCalAppointmentUrl : undefined,
+        attributes: gbpAttributesRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 20),
+      },
+      websiteContent: {
+        paymentMethods,
+        cancellationPolicy: cancellationPolicy.trim() ? cancellationPolicy.trim() : undefined,
+        faqs,
+        nearbyTransport: nearbyTransportRaw
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 12),
+        parkingNotes: parkingNotes.trim() ? parkingNotes.trim() : undefined,
+        privacyPolicyUrl: privacyPolicyUrl.trim() ? privacyPolicyUrl.trim() : undefined,
       },
       keywords: {
         seedKeywords: parseSeedKeywords(seedKeywordsRaw),
@@ -184,7 +463,11 @@ export function PsychologistIntakeForm({ orgId }: Props) {
     }),
     [
       addressText,
-      automationMode,
+      calAppointmentUrlOverride,
+      calMeetingModes,
+      calServiceSlugs,
+      useWhatsapp,
+      useCalcom,
       calApiKey,
       calUsername,
       clientGoogleAccountEmail,
@@ -194,26 +477,43 @@ export function PsychologistIntakeForm({ orgId }: Props) {
       dnsAccessAvailable,
       domain,
       email,
+      cancellationPolicy,
+      faqs,
+      galleryImages,
       gbpMapsUrl,
+      gbpAccessMethod,
+      gbpHasGoogleAccount,
+      gbpAdditionalCategoriesRaw,
+      gbpAttributesRaw,
+      gbpDescription,
       gbpOperatorEmail,
+      gbpPrimaryCategory,
       gbpVerificationExpected,
       hasOldWebsite,
+      heroImage,
       keywordsApproved,
       languageMode,
       lat,
       legalType,
       lng,
       locality,
+      nearbyTransportRaw,
+      derivedCalAppointmentUrl,
+      openingHours,
       oldWebsiteUrl,
       orgId,
       otherLanguagesNotes,
+      parkingNotes,
+      paymentMethods,
       phone,
       placeId,
+      privacyPolicyUrl,
       profileClaimed,
       profileExists,
       seedKeywordsRaw,
       services,
       specialties,
+      wantsWebsite,
       wantsDomainMigration,
       whatsappNumber,
     ],
@@ -271,6 +571,13 @@ export function PsychologistIntakeForm({ orgId }: Props) {
       clearTimeout(t)
     }
   }, [addrQuery, orgId])
+
+  useEffect(() => {
+    if (seedKeywordsDirty) return
+    if (!county && !locality) return
+    const kws = generateSeedKeywords({ locality, county: county ?? countyRaw })
+    setSeedKeywordsRaw(kws.join('\n'))
+  }, [county, countyRaw, locality, seedKeywordsDirty])
 
   async function selectPrediction(predPlaceId: string, description: string) {
     setAddrOpen(false)
@@ -338,11 +645,14 @@ export function PsychologistIntakeForm({ orgId }: Props) {
     if (!name) return
     const duration = customServiceDuration.trim() ? Number(customServiceDuration) : undefined
     const price = customServicePrice.trim() ? Number(customServicePrice) : NaN
-    if (!Number.isFinite(price)) return
 
     setServices((prev) => [
       ...prev,
-      { name, durationMinutes: Number.isFinite(duration) ? duration : undefined, priceRon: price },
+      {
+        name,
+        durationMinutes: Number.isFinite(duration) ? duration : undefined,
+        priceRon: Number.isFinite(price) ? price : null,
+      },
     ])
     setCustomServiceName('')
     setCustomServiceDuration('')
@@ -352,6 +662,15 @@ export function PsychologistIntakeForm({ orgId }: Props) {
   function setServicePrice(name: string, raw: string) {
     const n = raw.trim() ? Number(raw) : NaN
     setServices((prev) => prev.map((s) => (s.name === name ? { ...s, priceRon: Number.isFinite(n) ? n : null } : s)))
+  }
+
+  function setServiceDuration(name: string, raw: string) {
+    const n = raw.trim() ? Number(raw) : NaN
+    setServices((prev) =>
+      prev.map((s) =>
+        s.name === name ? { ...s, durationMinutes: Number.isFinite(n) ? Math.round(n) : undefined } : s,
+      ),
+    )
   }
 
   function validateCurrentStep(): boolean {
@@ -402,13 +721,43 @@ export function PsychologistIntakeForm({ orgId }: Props) {
               Finalul afișează payload-ul complet (JSON). Nu se salvează în Supabase și nu rulează scripturi.
             </p>
           </div>
-          <div className="text-xs text-slate-500">
-            Step <span className="text-slate-200">{step}</span> / 4
+          <div className="flex items-center gap-3">
+            <label className="inline-flex items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                checked={operatorAdvanced}
+                onChange={(e) => setOperatorAdvanced(e.target.checked)}
+              />
+              Operator advanced
+            </label>
+            <div className="text-xs text-slate-500">
+              Step <span className="text-slate-200">{step}</span> / 4
+            </div>
           </div>
         </div>
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+        {Object.keys(errors).length > 0 ? (
+          <div className="mb-6 rounded-xl border border-rose-900/40 bg-rose-950/20 p-4 text-sm text-rose-200">
+            <div className="font-medium">Nu poți continua încă</div>
+            <div className="mt-1 text-xs text-rose-200/80">Fixează câmpurile de mai jos (rezumat):</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+              {Object.entries(errors)
+                .slice(0, 6)
+                .map(([k, v]) => (
+                  <li key={k}>
+                    <span className="font-mono text-rose-100/90">{k}</span>: {v}
+                  </li>
+                ))}
+              {Object.keys(errors).length > 6 ? <li>…și încă {Object.keys(errors).length - 6}</li> : null}
+            </ul>
+            <div className="mt-2 text-xs text-rose-200/80">
+              Tip: dacă la GBP nu știi încă un răspuns, poți lăsa opțiunile pe “unknown” și revenim ulterior.
+            </div>
+          </div>
+        ) : null}
         {step === 1 ? (
           <div className="space-y-6">
             <div>
@@ -464,7 +813,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 <input
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(normalizePhoneInput(e.target.value))}
                   inputMode="tel"
                   placeholder="ex: 07xx xxx xxx"
                 />
@@ -531,7 +880,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 </div>
                 <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-400">
                   <div className="text-[10px] uppercase tracking-wide text-slate-500">Place ID</div>
-                  <div className="mt-1 font-mono text-slate-200">{placeId ? placeId : '—'}</div>
+                  <div className="mt-1 break-all font-mono text-slate-200">{placeId ? placeId : '—'}</div>
                 </div>
               </div>
 
@@ -539,6 +888,114 @@ export function PsychologistIntakeForm({ orgId }: Props) {
               {errors['location.lat'] || errors['location.lng'] ? (
                 <p className="text-xs text-rose-300">Selectează o sugestie Google Places ca să avem coordonate.</p>
               ) : null}
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+              <p className="text-sm font-medium text-slate-200">Vrei website?</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Dacă nu, rămânem pe GBP + (opțional) Cal.com și/sau WhatsApp pentru update-uri.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWantsWebsite(true)}
+                  className={clsx(
+                    'rounded-lg border px-3 py-2 text-sm',
+                    wantsWebsite
+                      ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
+                      : 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-900',
+                  )}
+                >
+                  Da, vreau website
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWantsWebsite(false)}
+                  className={clsx(
+                    'rounded-lg border px-3 py-2 text-sm',
+                    !wantsWebsite
+                      ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
+                      : 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-900',
+                  )}
+                >
+                  Nu, fără website
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+              <p className="text-sm font-medium text-slate-200">Program (pentru Cal.com + GBP)</p>
+              <p className="text-xs text-slate-500">
+                Îl folosim pentru setarea event types în Cal.com și pentru afișarea programului în Google Business Profile.
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Zile</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const).map((d) => {
+                      const checked = (openingHours[0]?.dayOfWeek ?? []).includes(d)
+                      return (
+                        <label
+                          key={d}
+                          className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300"
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                            checked={checked}
+                            onChange={(e) => {
+                              setOpeningHours((prev) => {
+                                const first =
+                                  prev[0] ??
+                                  ({
+                                    dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                                    opens: '09:00',
+                                    closes: '18:00',
+                                  } as const)
+                                const set = new Set(first.dayOfWeek)
+                                if (e.target.checked) set.add(d)
+                                else set.delete(d)
+                                return [{ ...first, dayOfWeek: Array.from(set) as typeof first.dayOfWeek }, ...prev.slice(1)]
+                              })
+                            }}
+                          />
+                          {d.slice(0, 3)}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Opens</label>
+                    <input
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      value={openingHours[0]?.opens ?? '09:00'}
+                      onChange={(e) =>
+                        setOpeningHours((prev) => [
+                          { ...(prev[0] ?? { dayOfWeek: ['Monday'], opens: '09:00', closes: '18:00' }), opens: e.target.value },
+                          ...prev.slice(1),
+                        ])
+                      }
+                      placeholder="09:00"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Closes</label>
+                    <input
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      value={openingHours[0]?.closes ?? '18:00'}
+                      onChange={(e) =>
+                        setOpeningHours((prev) => [
+                          { ...(prev[0] ?? { dayOfWeek: ['Monday'], opens: '09:00', closes: '18:00' }), closes: e.target.value },
+                          ...prev.slice(1),
+                        ])
+                      }
+                      placeholder="18:00"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
@@ -550,107 +1007,358 @@ export function PsychologistIntakeForm({ orgId }: Props) {
               <p className="mt-1 text-sm text-slate-500">Definim oferta și opțiunile de limbă / domeniu.</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-200">Limbă UI</label>
-                <select
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  value={languageMode}
-                  onChange={(e) => setLanguageMode(parseLanguageMode(e.target.value))}
-                >
-                  <option value="ro">Română</option>
-                  <option value="ro_en">Română + Engleză</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-200">Alte limbi (manual, cost extra)</label>
-                <input
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  value={otherLanguagesNotes}
-                  onChange={(e) => setOtherLanguagesNotes(e.target.value)}
-                  placeholder="ex: Franceză — de discutat separat"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-200">Site vechi (pentru inspirație)?</p>
-                  <p className="mt-1 text-xs text-slate-500">Dacă există, îl folosim ca referință pentru structură/ton.</p>
+            {wantsWebsite ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-200">Limbă UI</label>
+                    <select
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      value={languageMode}
+                      onChange={(e) => setLanguageMode(parseLanguageMode(e.target.value))}
+                    >
+                      <option value="ro">Română</option>
+                      <option value="ro_en">Română + Engleză</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-200">Alte limbi (manual, cost extra)</label>
+                    <input
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      value={otherLanguagesNotes}
+                      onChange={(e) => setOtherLanguagesNotes(e.target.value)}
+                      placeholder="ex: Franceză — de discutat separat"
+                    />
+                  </div>
                 </div>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={hasOldWebsite}
-                    onChange={(e) => setHasOldWebsite(e.target.checked)}
-                  />
-                  Da
-                </label>
-              </div>
-              {hasOldWebsite ? (
-                <div className="mt-3 space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">URL site vechi</label>
-                  <input
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                    value={oldWebsiteUrl}
-                    onChange={(e) => setOldWebsiteUrl(e.target.value)}
-                    placeholder="https://…"
-                  />
-                  {errors['website.oldWebsiteUrl'] ? (
-                    <p className="text-xs text-rose-300">{errors['website.oldWebsiteUrl']}</p>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">Site vechi (pentru inspirație)?</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Dacă există, îl folosim ca referință pentru structură/ton.
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                        checked={hasOldWebsite}
+                        onChange={(e) => setHasOldWebsite(e.target.checked)}
+                      />
+                      Da
+                    </label>
+                  </div>
+                  {hasOldWebsite ? (
+                    <div className="mt-3 space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">URL site vechi</label>
+                      <input
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={oldWebsiteUrl}
+                        onChange={(e) => setOldWebsiteUrl(e.target.value)}
+                        placeholder="https://…"
+                      />
+                      {errors['website.oldWebsiteUrl'] ? (
+                        <p className="text-xs text-rose-300">{errors['website.oldWebsiteUrl']}</p>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-200">Domeniu</p>
-                  <p className="mt-1 text-xs text-slate-500">Dacă se dorește migrare, o tratăm ca task separat (manual).</p>
-                </div>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={wantsDomainMigration}
-                    onChange={(e) => setWantsDomainMigration(e.target.checked)}
-                  />
-                  Vreau migrare pe domeniul acesta
-                </label>
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Domeniu (fără https)
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    placeholder="ex: cabinet-psihologie.ro"
-                  />
-                  {errors['website.domain'] ? <p className="text-xs text-rose-300">{errors['website.domain']}</p> : null}
-                </div>
-                {wantsDomainMigration ? (
-                  <label className="inline-flex items-center gap-2 text-sm text-slate-300 mt-6 md:mt-0">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={dnsAccessAvailable}
-                      onChange={(e) => setDnsAccessAvailable(e.target.checked)}
-                    />
-                    Avem acces la DNS / modificări domeniu
-                  </label>
-                ) : (
-                  <div className="text-xs text-slate-500 mt-6 md:mt-0">
-                    Dacă domeniul nu este stabilit acum, putem decide ulterior.
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">Domeniu</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Dacă se dorește migrare, o tratăm ca task separat (manual).
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                        checked={wantsDomainMigration}
+                        onChange={(e) => setWantsDomainMigration(e.target.checked)}
+                      />
+                      Vreau migrare pe domeniul acesta
+                    </label>
                   </div>
-                )}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Domeniu (fără https)
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={domain}
+                        onChange={(e) => setDomain(e.target.value)}
+                        placeholder="ex: cabinet-psihologie.ro"
+                      />
+                      {errors['website.domain'] ? (
+                        <p className="text-xs text-rose-300">{errors['website.domain']}</p>
+                      ) : null}
+                    </div>
+                    {wantsDomainMigration ? (
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-300 mt-6 md:mt-0">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                          checked={dnsAccessAvailable}
+                          onChange={(e) => setDnsAccessAvailable(e.target.checked)}
+                        />
+                        Avem acces la DNS / modificări domeniu
+                      </label>
+                    ) : (
+                      <div className="text-xs text-slate-500 mt-6 md:mt-0">
+                        Dacă domeniul nu este stabilit acum, putem decide ulterior.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+                  <p className="text-sm font-medium text-slate-200">Imagini website (hero + galerie)</p>
+                  <p className="text-xs text-slate-500">
+                    Le optimizăm local (resize + compresie) ca să le putem urca rapid mai târziu. Debug-only: în payload
+                    păstrăm doar numele fișierelor optimizate.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Hero (1)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) {
+                            setHeroImage(null)
+                            return
+                          }
+                          const optimized = await resizeImageFile(file, { maxWidth: 1600, maxHeight: 1200, quality: 0.85 })
+                          setHeroImage(optimized)
+                        }}
+                      />
+                      {heroImage ? (
+                        <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs text-slate-300">{heroImage.name}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {Math.round(heroImage.size / 1024)} KB · {heroImage.type || 'image'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:bg-slate-900"
+                            onClick={() => setHeroImage(null)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : null}
+                      {heroPreviewUrl ? (
+                        <div className="relative h-40 w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                          <Image src={heroPreviewUrl} alt="Hero preview" fill unoptimized className="object-cover" />
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Galerie (max 3)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files ?? []).slice(0, 3)
+                          if (!files.length) {
+                            setGalleryImages([])
+                            return
+                          }
+                          const optimized = await Promise.all(
+                            files.map((f) => resizeImageFile(f, { maxWidth: 1600, maxHeight: 1200, quality: 0.85 })),
+                          )
+                          setGalleryImages(optimized)
+                        }}
+                      />
+                      {galleryImages.length ? (
+                        <div className="space-y-2">
+                          {galleryImages.map((f) => (
+                            <div
+                              key={f.name}
+                              className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 p-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-xs text-slate-300">{f.name}</p>
+                                <p className="text-[11px] text-slate-500">
+                                  {Math.round(f.size / 1024)} KB · {f.type || 'image'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:bg-slate-900"
+                                onClick={() => setGalleryImages((prev) => prev.filter((x) => x !== f))}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {galleryPreviewUrls.length ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {galleryPreviewUrls.map((u, idx) => (
+                            <div key={u} className="relative h-20 w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                              <Image src={u} alt={`Gallery ${idx + 1}`} fill unoptimized className="object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">Website — informații utile</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Multe se pot seta implicit, dar aici avem override-uri care ajută la generarea site-ului + GDPR + copy.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Metode de plată</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { id: 'cash', label: 'Cash' },
+                          { id: 'bank_transfer', label: 'Transfer bancar' },
+                          { id: 'card', label: 'Card' },
+                          { id: 'revolut', label: 'Revolut' },
+                          { id: 'insurance', label: 'Decontare (asigurare)' },
+                        ] as const
+                      ).map((m) => {
+                        const checked = paymentMethods.includes(m.id)
+                        return (
+                          <label
+                            key={m.id}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                              checked={checked}
+                              onChange={(e) =>
+                                setPaymentMethods((prev) => {
+                                  const next = new Set(prev)
+                                  if (e.target.checked) next.add(m.id)
+                                  else next.delete(m.id)
+                                  return Array.from(next)
+                                })
+                              }
+                            />
+                            {m.label}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Politică anulare (site)</label>
+                    <textarea
+                      className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      value={cancellationPolicy}
+                      onChange={(e) => setCancellationPolicy(e.target.value)}
+                      placeholder="ex: reprogramări cu minim 24h înainte…"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Transport (1 per linie)</label>
+                      <textarea
+                        className="min-h-20 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={nearbyTransportRaw}
+                        onChange={(e) => setNearbyTransportRaw(e.target.value)}
+                        placeholder="ex: Metro M2 · Universitate (5 min)\nAutobuz 3xx…"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Parcare (opțional)</label>
+                      <textarea
+                        className="min-h-20 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={parkingNotes}
+                        onChange={(e) => setParkingNotes(e.target.value)}
+                        placeholder="ex: Parcare publică pe stradă…"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Privacy policy URL (opțional)
+                    </label>
+                    <input
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      value={privacyPolicyUrl}
+                      onChange={(e) => setPrivacyPolicyUrl(e.target.value)}
+                      placeholder="https://… sau /politica-confidentialitate"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">FAQ (site)</label>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:bg-slate-900"
+                        onClick={() => setFaqs((prev) => [...prev, { question: '', answer: '' }].slice(0, 12))}
+                      >
+                        Add Q&A
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {faqs.map((qa, idx) => (
+                        <div key={idx} className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                            <input
+                              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                              value={qa.question}
+                              onChange={(e) =>
+                                setFaqs((prev) => prev.map((x, i) => (i === idx ? { ...x, question: e.target.value } : x)))
+                              }
+                              placeholder="Întrebare"
+                            />
+                            <button
+                              type="button"
+                              className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-900"
+                              onClick={() => setFaqs((prev) => prev.filter((_, i) => i !== idx))}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <textarea
+                            className="min-h-20 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                            value={qa.answer}
+                            onChange={(e) =>
+                              setFaqs((prev) => prev.map((x, i) => (i === idx ? { ...x, answer: e.target.value } : x)))
+                            }
+                            placeholder="Răspuns"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-400">
+                Website este dezactivat — sărim peste setările de limbă, site vechi și domeniu.
               </div>
-            </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -660,38 +1368,62 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {PRESET_SERVICES.map((s) => (
+                {PRESET_SERVICES.map((s) => {
+                  const selected = services.some((x) => x.name.toLowerCase() === s.name.toLowerCase())
+                  return (
                   <button
                     key={s.name}
                     type="button"
                     onClick={() => addPresetService(s)}
-                    className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-200 hover:bg-slate-900"
+                    disabled={selected}
+                    className={clsx(
+                      'rounded-full border px-3 py-1 text-xs',
+                      selected
+                        ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200 cursor-default opacity-90'
+                        : 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-900',
+                    )}
                   >
-                    + {s.name}
+                    {selected ? '✓ ' : '+ '}
+                    {s.name}
                   </button>
-                ))}
+                  )
+                })}
               </div>
 
               {services.length > 0 ? (
                 <div className="space-y-2">
-                  {services.map((s) => (
+                  {services.map((s, idx) => (
                     <div
                       key={s.name}
                       className="rounded-xl border border-slate-800 bg-slate-950/30 p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
                     >
                       <div>
                         <div className="text-sm font-medium text-slate-200">{s.name}</div>
-                        <div className="text-xs text-slate-500">
-                          Durată: {s.durationMinutes ?? '—'} min
-                        </div>
+                        <div className="text-xs text-slate-500">Setează durată + preț (editabile).</div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-stretch gap-2 md:items-center md:flex-row md:gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 md:hidden">Durată (min)</span>
+                          <input
+                            className="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                            value={s.durationMinutes == null ? '' : String(s.durationMinutes)}
+                            onChange={(e) => setServiceDuration(s.name, e.target.value)}
+                            inputMode="numeric"
+                            placeholder="50"
+                          />
+                          <span className="text-xs text-slate-500">min</span>
+                        </div>
+                        {errors[`services.${idx}.priceRon`] ? (
+                          <span className="text-xs text-rose-300">{errors[`services.${idx}.priceRon`]}</span>
+                        ) : (
+                          <span className="text-xs text-slate-500 md:hidden">Preț (RON)</span>
+                        )}
                         <input
                           className="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                           value={s.priceRon == null ? '' : String(s.priceRon)}
                           onChange={(e) => setServicePrice(s.name, e.target.value)}
                           inputMode="numeric"
-                          placeholder="Preț"
+                          placeholder="250"
                         />
                         <span className="text-xs text-slate-500">RON</span>
                         <button
@@ -723,7 +1455,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                   inputMode="numeric"
                   placeholder="Durată (min)"
                 />
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 md:flex-row">
                   <input
                     className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                     value={customServicePrice}
@@ -734,7 +1466,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                   <button
                     type="button"
                     onClick={addCustomService}
-                    className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+                    className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 md:whitespace-nowrap"
                   >
                     Add
                   </button>
@@ -766,7 +1498,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                   </button>
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 md:flex-row">
                 <input
                   className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                   value={customSpecialty}
@@ -776,7 +1508,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 <button
                   type="button"
                   onClick={addCustomSpecialty}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-900"
+                  className="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-900 md:whitespace-nowrap"
                 >
                   Add
                 </button>
@@ -800,31 +1532,42 @@ export function PsychologistIntakeForm({ orgId }: Props) {
 
             <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
               <p className="text-sm font-medium text-slate-200">Automatizare</p>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                {(
-                  [
-                    { id: 'passive', label: 'Pasiv' },
-                    { id: 'whatsapp', label: 'WhatsApp' },
-                    { id: 'calcom', label: 'Cal.com' },
-                  ] as const
-                ).map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setAutomationMode(m.id)}
-                    className={clsx(
-                      'rounded-lg border px-3 py-2 text-sm text-left',
-                      automationMode === m.id
-                        ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
-                        : 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-900',
-                    )}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+              <p className="text-xs text-slate-500">
+                Cal.com este o opțiune separată și puternică (programări automate). Merge și fără website (link direct),
+                dar pe website îl putem integra mai elegant.
+              </p>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                    checked={useWhatsapp}
+                    onChange={(e) => setUseWhatsapp(e.target.checked)}
+                  />
+                  WhatsApp (no-reply update-uri)
+                </label>
+                <label className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
+                    checked={useCalcom}
+                    onChange={(e) => setUseCalcom(e.target.checked)}
+                  />
+                  Cal.com (programări automate)
+                </label>
               </div>
 
-              {automationMode === 'whatsapp' ? (
+              {!useWhatsapp && !useCalcom ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                  <div className="font-medium text-slate-200">Baseline: GBP only</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    <li>Ne concentrăm pe Google Business Profile + SEO local.</li>
+                    <li>Lead-urile vin prin apel / mesaj / butoane GBP (fără booking automat).</li>
+                  </ul>
+                </div>
+              ) : null}
+
+              {useWhatsapp ? (
                 <div className="space-y-1">
                   <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
                     Număr WhatsApp (cu prefix)
@@ -841,7 +1584,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 </div>
               ) : null}
 
-              {automationMode === 'calcom' ? (
+              {useCalcom ? (
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Cal.com username</label>
@@ -857,6 +1600,10 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                     <p className="text-xs text-slate-500">
                       Format: <span className="font-mono text-slate-300">cal.com/{calUsername || 'username'}</span> ·
                       timezone: <span className="font-mono text-slate-300">Europe/Bucharest</span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Tip: pentru no-reply notificări, putem folosi WhatsApp doar pentru update-uri booking (fără
+                      conversații).
                     </p>
                   </div>
 
@@ -884,15 +1631,139 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                       În debug preview, cheia este mascată implicit (se vede doar finalul).
                     </p>
                   </div>
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">Cal.com (auto defaults + override)</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Default appointment URL se derivă din username. Event slugs se derivă din numele serviciilor (editabile).
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Appointment URL (derived)</label>
+                      <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200 break-all font-mono">
+                        {(calAppointmentUrlOverride.trim() ? calAppointmentUrlOverride.trim() : derivedCalAppointmentUrl) ?? '—'}
+                      </div>
+                      {operatorAdvanced ? (
+                        <div className="mt-2 space-y-1">
+                          <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                            Override appointment URL (optional)
+                          </label>
+                          <input
+                            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                            value={calAppointmentUrlOverride}
+                            onChange={(e) => setCalAppointmentUrlOverride(e.target.value)}
+                            placeholder={derivedCalAppointmentUrl ?? 'https://cal.com/username'}
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-500">Override este ascuns (Operator advanced).</p>
+                      )}
+                    </div>
+
+                    {services.length ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Event slugs per serviciu</p>
+                        <div className="space-y-2">
+                          {services.map((s) => (
+                            <div
+                              key={s.name}
+                              className="grid grid-cols-1 gap-2 rounded-lg border border-slate-800 bg-slate-950 p-3 md:grid-cols-3 md:items-center"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-slate-200">{s.name}</div>
+                                <div className="text-xs text-slate-500">Default: {toSlug(s.name)}</div>
+                              </div>
+                              {operatorAdvanced ? (
+                                <>
+                                  <input
+                                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                                    value={calServiceSlugs[s.name] ?? ''}
+                                    onChange={(e) =>
+                                      setCalServiceSlugs((prev) => ({ ...prev, [s.name]: toSlug(e.target.value || s.name) }))
+                                    }
+                                    placeholder={toSlug(s.name)}
+                                  />
+                                  <select
+                                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                                    value={calMeetingModes[s.name] ?? 'both'}
+                                    onChange={(e) =>
+                                      setCalMeetingModes((prev) => ({
+                                        ...prev,
+                                        [s.name]:
+                                          e.target.value === 'in_person' || e.target.value === 'online'
+                                            ? e.target.value
+                                            : 'both',
+                                      }))
+                                    }
+                                  >
+                                    <option value="both">In-person + online</option>
+                                    <option value="in_person">Doar in-person</option>
+                                    <option value="online">Doar online</option>
+                                  </select>
+                                </>
+                              ) : (
+                                <div className="md:col-span-2 text-xs text-slate-500">
+                                  Auto: <span className="font-mono text-slate-300">{toSlug(s.name)}</span> · mode:{' '}
+                                  <span className="font-mono text-slate-300">{calMeetingModes[s.name] ?? 'both'}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
               <p className="text-sm font-medium text-slate-200">Google Business Profile (GBP)</p>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <p className="text-xs text-slate-500">
+                Scop: să obținem acces Manager/Owner ca să administrăm profilul. Verificarea poate dura (postcard/telefon/video).
+              </p>
+
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                {(
+                  [
+                    { id: 'unknown', label: 'Nu știm încă' },
+                    { id: 'yes', label: 'Are cont Google' },
+                    { id: 'no', label: 'Nu are cont Google' },
+                  ] as const
+                ).map((x) => (
+                  <button
+                    key={x.id}
+                    type="button"
+                    onClick={() => setGbpHasGoogleAccount(x.id)}
+                    className={clsx(
+                      'rounded-lg border px-3 py-2 text-sm text-left',
+                      gbpHasGoogleAccount === x.id
+                        ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
+                        : 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-900',
+                    )}
+                  >
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+
+              {gbpHasGoogleAccount === 'no' ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                  <div className="font-medium text-slate-200">Ajutor creare cont</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    <li>Îi ghidăm să creeze un cont Google dedicat business-ului.</li>
+                    <li>După asta, ne invită în GBP la “People and access”.</li>
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Email Google client</label>
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Email Google client (dacă există)
+                  </label>
                   <input
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                     value={clientGoogleAccountEmail}
@@ -901,7 +1772,9 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Email operator (acces)</label>
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Email operator (acces)
+                  </label>
                   <input
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                     value={gbpOperatorEmail}
@@ -911,11 +1784,35 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                {(
+                  [
+                    { id: 'unknown', label: 'Metodă acces: necunoscut' },
+                    { id: 'client_invite', label: 'Clientul ne invită (recomandat)' },
+                    { id: 'we_request', label: 'Noi trimitem request (pe email)' },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setGbpAccessMethod(m.id)}
+                    className={clsx(
+                      'rounded-lg border px-3 py-2 text-sm text-left',
+                      gbpAccessMethod === m.id
+                        ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
+                        : 'border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-900',
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 <label className="inline-flex items-center gap-2 text-sm text-slate-300">
                   <input
                     type="checkbox"
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
                     checked={profileExists}
                     onChange={(e) => setProfileExists(e.target.checked)}
                   />
@@ -924,7 +1821,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 <label className="inline-flex items-center gap-2 text-sm text-slate-300">
                   <input
                     type="checkbox"
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600 disabled:opacity-50"
                     checked={profileClaimed}
                     disabled={!profileExists}
                     onChange={(e) => setProfileClaimed(e.target.checked)}
@@ -953,6 +1850,100 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 />
               </div>
 
+              <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-200">GBP (auto defaults + override)</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Categorii + descriere + appointment URL se pot deriva din specialități, locație și Cal.com.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Primary category</label>
+                    {operatorAdvanced ? (
+                      <input
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={gbpPrimaryCategory}
+                        onChange={(e) => setGbpPrimaryCategory(e.target.value)}
+                        placeholder="Psiholog"
+                      />
+                    ) : (
+                      <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200">
+                        {gbpPrimaryCategory || 'Psiholog'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Additional categories
+                    </label>
+                    {operatorAdvanced ? (
+                      <input
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={gbpAdditionalCategoriesRaw}
+                        onChange={(e) => setGbpAdditionalCategoriesRaw(e.target.value)}
+                        placeholder={derivedGbpAdditionalCategories.join(', ') || 'Psihoterapeut, Consilier psihologic'}
+                      />
+                    ) : (
+                      <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200">
+                        {(gbpAdditionalCategoriesRaw || derivedGbpAdditionalCategories.join(', ')) || '—'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Descriere (max 750)</label>
+                  <textarea
+                    className={clsx(
+                      'min-h-24 w-full rounded-lg border bg-slate-950 px-3 py-2 text-sm text-slate-100',
+                      operatorAdvanced ? 'border-slate-700' : 'border-slate-800 opacity-90',
+                    )}
+                    value={gbpDescription}
+                    onChange={(e) => operatorAdvanced && setGbpDescription(e.target.value)}
+                    placeholder={derivedGbpDescription}
+                    readOnly={!operatorAdvanced}
+                  />
+                  {derivedGbpDescription ? (
+                    <p className="text-xs text-slate-500">
+                      Default derivat: <span className="text-slate-300">{derivedGbpDescription}</span>
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Appointment URL (derived)</label>
+                    <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200 break-all font-mono">
+                      {derivedCalAppointmentUrl ?? '—'}
+                    </div>
+                    <p className="text-[11px] text-slate-500">Se setează automat dacă avem Cal.com username.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Attributes (comma)</label>
+                    {operatorAdvanced ? (
+                      <input
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                        value={gbpAttributesRaw}
+                        onChange={(e) => setGbpAttributesRaw(e.target.value)}
+                        placeholder={derivedGbpAttributes.join(', ') || 'Programări online, Consiliere psihologică'}
+                      />
+                    ) : (
+                      <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200">
+                        {(gbpAttributesRaw || derivedGbpAttributes.join(', ')) || '—'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {profileExists && !profileClaimed ? (
+                <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-200">
+                  Profilul există dar nu e “claimed”. Asta intră pe fluxul de revendicare/verificare (poate dura câteva
+                  zile).
+                </div>
+              ) : null}
+
               <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
                 <div className="font-medium text-slate-200">Note (flow)</div>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -971,9 +1962,17 @@ export function PsychologistIntakeForm({ orgId }: Props) {
               <textarea
                 className="min-h-28 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                 value={seedKeywordsRaw}
-                onChange={(e) => setSeedKeywordsRaw(e.target.value)}
+                onChange={(e) => {
+                  setSeedKeywordsDirty(true)
+                  setSeedKeywordsRaw(e.target.value)
+                }}
                 placeholder="1 per linie sau separate prin virgulă…"
               />
+              {!seedKeywordsDirty ? (
+                <p className="text-xs text-slate-500">
+                  Seed keywords au fost completate automat din locație. Dacă editezi manual, nu le mai suprascriem.
+                </p>
+              ) : null}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">
                   Count: <span className="text-slate-200">{parseSeedKeywords(seedKeywordsRaw).length}</span>
@@ -981,7 +1980,7 @@ export function PsychologistIntakeForm({ orgId }: Props) {
                 <label className="inline-flex items-center gap-2 text-sm text-slate-300">
                   <input
                     type="checkbox"
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-600"
                     checked={keywordsApproved}
                     onChange={(e) => setKeywordsApproved(e.target.checked)}
                   />
