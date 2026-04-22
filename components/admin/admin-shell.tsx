@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Hash, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Hash, Wrench, LogOut } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 const nav = [
   { href: "/app", label: "Dashboard", icon: LayoutDashboard },
   { href: "/app/clients", label: "Clients", icon: Users },
   { href: "/app/keywords", label: "Keywords", icon: Hash },
+  { href: "/app/tools", label: "Tools", icon: Wrench },
 ];
 
 export function AdminShell(props: { children: React.ReactNode; userEmail: string | null }) {
