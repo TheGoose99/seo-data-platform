@@ -10,7 +10,7 @@ const bodySchema = z.object({
   orgId: z.string().uuid(),
   kind: z.enum(['dry', 'real']),
   scriptId: z.string().min(1).max(200),
-  params: z.record(z.unknown()).default({}),
+  params: z.record(z.string(), z.unknown()).default({}),
 })
 
 export async function POST(request: Request) {

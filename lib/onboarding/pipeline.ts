@@ -5,6 +5,7 @@ import { toSlugFromName } from '@/lib/onboarding/slug'
 import { buildToonFromIntake } from '@/lib/onboarding/toon'
 import { generateWebsiteLlmPayload } from '@/lib/onboarding/website-llm'
 import { mergeLlmIntoSeed } from '@/lib/onboarding/website-merge'
+import type { LlmClientPayload } from '@/lib/onboarding/website-schema'
 import referenceSeed from '@/lib/onboarding/reference-client.seed.json'
 
 export type OnboardingRunResult =
@@ -147,7 +148,7 @@ export async function runOnboardingPipelineForIntake(args: {
       })
 
     let websiteConfig: Record<string, unknown> | undefined
-    let llmPayload: Record<string, unknown> | undefined
+    let llmPayload: LlmClientPayload | undefined
 
     if (payload.website.wantsWebsite) {
       const baseSeed = structuredClone(referenceSeed) as Record<string, unknown>

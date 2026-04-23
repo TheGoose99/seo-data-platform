@@ -48,7 +48,7 @@ Also set **`VERCEL_TOKEN`** and **`VERCEL_ORG_ID`**. The first deployment URL is
 
 **Changing the site later:** clone the repo, commit, push to the default branch — Vercel builds from Git (no need to re-run the onboarding zip for routine edits).
 
-**If the repo already exists:** set **`GITHUB_REPO_EXISTS=reuse`** so creation errors are ignored and the script only pushes (useful for an empty repo you created manually, or after resolving conflicts).
+**If the repo already exists:**\n+\n+- Default: the pipeline creates a **fresh** repo by suffixing the slug (e.g. `slug-1a2b3c4d`).\n+- If you explicitly want to push into an existing repo (preserve history, no force-push), set **`GITHUB_ALLOW_PUSH_EXISTING=1`**.\n+- `GITHUB_REPO_EXISTS=reuse` still controls whether “repo exists” is treated as an error vs a recoverable state.
 
 **Duplicate repo without reuse:** creation fails with a clear message; use `GITHUB_REPO_EXISTS=reuse` or delete/rename the repo on GitHub.
 

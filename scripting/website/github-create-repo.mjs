@@ -9,7 +9,7 @@ const GH_HEADERS = {
 
 /**
  * @param {{ token: string; owner: string; repoName: string; reuseIfExists?: boolean }} opts
- * @returns {Promise<{ ok: true; fullName: string } | { ok: false; error: string; status?: number }>}
+ * @returns {Promise<{ ok: true; fullName: string; existed: boolean } | { ok: false; error: string; status?: number }>}
  */
 export async function createGitHubPrivateRepo(opts) {
   const { token, owner, repoName, reuseIfExists = false } = opts
@@ -42,7 +42,7 @@ export async function createGitHubPrivateRepo(opts) {
 
   if (res.status === 201) {
     const data = await res.json()
-    return { ok: true, fullName: data.full_name }
+    return { ok: true, fullName: data.full_name, existed: false }
   }
 
   const text = await res.text()
@@ -51,7 +51,7 @@ export async function createGitHubPrivateRepo(opts) {
     console.warn(
       `GitHub repo ${owner}/${repoName} already exists — continuing (GITHUB_REPO_EXISTS=reuse).`
     )
-    return { ok: true, fullName: `${owner}/${repoName}` }
+    return { ok: true, fullName: `${owner}/${repoName}`, existed: true }
   }
 
   if (res.status === 404 && !isUserOwner) {

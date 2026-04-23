@@ -227,12 +227,16 @@ async function runGitHubVercelLinkedDeploy(opts, appRoot) {
     process.exit(1)
   }
 
-  const repoName = resolveVercelProjectSlug()
+  const baseRepoName = resolveVercelProjectSlug()
   const reuseIfExists =
     process.env.GITHUB_REPO_EXISTS === 'reuse' || process.env.GITHUB_REPO_EXISTS === 'true'
+  const allowExistingPush =
+    process.env.GITHUB_ALLOW_PUSH_EXISTING === '1' ||
+    process.env.GITHUB_ALLOW_PUSH_EXISTING === 'true'
 
+  let repoName = baseRepoName
   console.log('Creating private GitHub repo:', `${ghOwner}/${repoName}`)
-  const created = await createGitHubPrivateRepo({
+  let created = await createGitHubPrivateRepo({
     token: ghToken,
     owner: ghOwner,
     repoName,
@@ -248,6 +252,23 @@ async function runGitHubVercelLinkedDeploy(opts, appRoot) {
     process.exit(1)
   }
 
+  // Default behavior: fresh repo per run. If name exists and we're reusing, create a new name unless explicitly allowed.
+  if (created.existed && reuseIfExists && !allowExistingPush) {
+    const suffix = (opts.runId || randomUUID()).replace(/[^a-z0-9]+/gi, '').slice(0, 8).toLowerCase()
+    repoName = sanitizeVercelProjectName(`${baseRepoName}-${suffix}`)
+    console.log(`Repo exists; creating a fresh repo instead: ${ghOwner}/${repoName}`)
+    created = await createGitHubPrivateRepo({
+      token: ghToken,
+      owner: ghOwner,
+      repoName,
+      reuseIfExists: false,
+    })
+    if (!created.ok) {
+      console.error(created.error)
+      process.exit(1)
+    }
+  }
+
   const fullName = created.fullName
   console.log('Pushing to GitHub:', fullName)
   try {
@@ -257,6 +278,7 @@ async function runGitHubVercelLinkedDeploy(opts, appRoot) {
       repoName,
       token: ghToken,
       branch: process.env.GITHUB_DEFAULT_BRANCH || 'main',
+      pushExisting: allowExistingPush,
     })
   } catch (e) {
     console.error('git init/push failed:', e instanceof Error ? e.message : e)
