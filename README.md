@@ -41,6 +41,24 @@ Internal **Local SEO** data platform: **GSC** + **Google Business Profile** + **
 
    Open `/login`, then `/app` → create an org (optional) → onboard a client → open the dashboard and run ingestion when APIs are configured.
 
+## Firebase ownership for closeby integration
+
+`seo-data-platform` is the source of truth for Firebase config/secrets used by `closeby-demo-project`.
+
+- Required env in this repo:
+  - `NEXT_PUBLIC_FIREBASE_API_KEY`
+  - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+  - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+  - `NEXT_PUBLIC_FIREBASE_APP_ID`
+  - `FIREBASE_SERVICE_ACCOUNT_JSON`
+  - `INTERNAL_LOCK_API_TOKEN` (shared internal token)
+- Internal endpoints consumed by closeby:
+  - `GET /api/internal/firebase/config`
+  - `POST /api/internal/firebase/verify-phone`
+  - `POST /api/internal/firebase/phone-lock`
+
+All these routes require `x-internal-token` matching `INTERNAL_LOCK_API_TOKEN` in production.
+
 ## Internal onboarding (psychologist cabinets)
 
 This repo now includes an **internal (team-only) onboarding intake** for psychologist cabinets. It is **debug-only** today:
