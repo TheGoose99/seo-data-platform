@@ -7,14 +7,14 @@
 import type { CalComSlugTriple } from '../cal-types'
 
 export const MOCK_CAL_INTEGRATIONS = {
-  calComUsername: '__MOCK_CAL_USER__',
+  calComUsername: 'gabu-iieqyx',
   calComCanonicalEventSlugs: {
-    initial: 'consultatie-initiala',
-    session: 'sedinta-individuala',
-    couple: 'terapie-cuplu',
+    initial: '30min',
+    session: '30min',
+    couple: '30min',
   } satisfies CalComSlugTriple,
   calComEventSlugs: {
-    initial: '15min',
+    initial: '30min',
     session: '30min',
     couple: '30min',
   } satisfies CalComSlugTriple,

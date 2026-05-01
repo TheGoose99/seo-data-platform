@@ -36,9 +36,9 @@ Example: set public Cal fields for one client (replace the UUID):
 ```sql
 update public.clients
 set
-  cal_com_username = 'your-cal-username',
-  cal_com_canonical_event_slugs = '{"initial":"consultatie-initiala","session":"sedinta-individuala","couple":"terapie-cuplu"}'::jsonb,
-  cal_com_event_slugs = '{"initial":"15min","session":"30min","couple":"30min"}'::jsonb
+  cal_com_username = 'gabu-iieqyx',
+  cal_com_canonical_event_slugs = '{"initial":"30min","session":"30min","couple":"30min"}'::jsonb,
+  cal_com_event_slugs = '{"initial":"30min","session":"30min","couple":"30min"}'::jsonb
 where id = '00000000-0000-0000-0000-000000000000';
 ```
 

@@ -1,13 +1,13 @@
 {
   "clientId": "1f2865c5-6bec-41fc-9980-a229e5aba473",
-  "calComUsername": "__MOCK_CAL_USER__",
+  "calComUsername": "gabu-iieqyx",
   "calComCanonicalEventSlugs": {
-    "initial": "consultatie-initiala",
-    "session": "sedinta-individuala",
-    "couple": "terapie-cuplu"
+    "initial": "30min",
+    "session": "30min",
+    "couple": "30min"
   },
   "calComEventSlugs": {
-    "initial": "15min",
+    "initial": "30min",
     "session": "30min",
     "couple": "30min"
   }

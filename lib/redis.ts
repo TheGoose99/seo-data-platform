@@ -19,6 +19,23 @@ function normalizePhone(raw: string): string {
   return cleaned
 }
 
+type PhoneLockRecord = {
+  phone: string
+  bookingUid: string
+  clientSlug: string
+  webpage: string
+  createdAt: string
+}
+
+function normalizeClientSlug(raw: string): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 async function redisFetch<T>(
   path: string,
   init?: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
@@ -90,5 +107,65 @@ export async function deletePhoneLock(rawPhone: string): Promise<number> {
 
 export async function markIdempotent(key: string, ttlSeconds: number): Promise<boolean> {
   return redisSetIfNotExists(key, { at: new Date().toISOString() }, ttlSeconds)
+}
+
+export function phoneBookingLockKey(rawPhone: string, rawClientSlug: string): string {
+  const phone = normalizePhone(rawPhone)
+  const clientSlug = normalizeClientSlug(rawClientSlug)
+  if (!phone) throw new Error('phoneBookingLockKey: phone is required')
+  if (!clientSlug) throw new Error('phoneBookingLockKey: clientSlug is required')
+  return `booking:lock:phone:${clientSlug}:${phone}`
+}
+
+export async function setPhoneBookingLock(rawPhone: string, bookingUid: string, webpage: string, rawClientSlug: string): Promise<void> {
+  const normalizedPhone = normalizePhone(rawPhone)
+  const clientSlug = normalizeClientSlug(rawClientSlug)
+  if (!normalizedPhone) throw new Error('setPhoneBookingLock: phone is required')
+  if (!bookingUid) throw new Error('setPhoneBookingLock: bookingUid is required')
+  if (!clientSlug) throw new Error('setPhoneBookingLock: clientSlug is required')
+
+  const key = phoneBookingLockKey(normalizedPhone, clientSlug)
+  const value: PhoneLockRecord = {
+    phone: normalizedPhone,
+    bookingUid,
+    clientSlug,
+    webpage: webpage || 'closeby-demo-project',
+    createdAt: new Date().toISOString(),
+  }
+  const val = JSON.stringify(value)
+  const path = `/set/${encodeURIComponent(key)}/${encodeURIComponent(val)}/EX/${encodeURIComponent(String(LOCK_TTL_SECONDS))}`
+  await redisFetch<UpstashResult<string | null>>(path)
+}
+
+export async function getPhoneBookingLock(rawPhone: string, rawClientSlug: string): Promise<PhoneLockRecord | null> {
+  const normalizedPhone = normalizePhone(rawPhone)
+  const clientSlug = normalizeClientSlug(rawClientSlug)
+  if (!normalizedPhone) return null
+  if (!clientSlug) return null
+  const key = phoneBookingLockKey(normalizedPhone, clientSlug)
+  const raw = await redisGet(key)
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<PhoneLockRecord>
+    if (
+      typeof parsed.phone !== 'string' ||
+      typeof parsed.bookingUid !== 'string' ||
+      typeof parsed.clientSlug !== 'string' ||
+      typeof parsed.webpage !== 'string' ||
+      typeof parsed.createdAt !== 'string'
+    ) {
+      return null
+    }
+    return {
+      phone: parsed.phone,
+      bookingUid: parsed.bookingUid,
+      clientSlug: parsed.clientSlug,
+      webpage: parsed.webpage,
+      createdAt: parsed.createdAt,
+    }
+  } catch {
+    return null
+  }
 }
 

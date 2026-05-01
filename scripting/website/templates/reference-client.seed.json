@@ -55,14 +55,14 @@
   ],
   "openingHoursDisplay": "Luni-Vineri: 09:00-18:00",
   "integrations": {
-    "calComUsername": "__MOCK_CAL_USER__",
+    "calComUsername": "gabu-iieqyx",
     "calComCanonicalEventSlugs": {
-      "initial": "consultatie-initiala",
-      "session": "sedinta-individuala",
-      "couple": "terapie-cuplu"
+      "initial": "30min",
+      "session": "30min",
+      "couple": "30min"
     },
     "calComEventSlugs": {
-      "initial": "15min",
+      "initial": "30min",
       "session": "30min",
       "couple": "30min"
     },
@@ -170,7 +170,7 @@
       "description": "Prima întâlnire este gratuită. Ne cunoaștem, înțeleg situația ta și stabilim dacă și cum putem lucra împreună.",
       "duration": 30,
       "currency": "RON",
-      "calEventSlug": "15min",
+      "calEventSlug": "30min",
       "icon": "🌱"
     },
     {
@@ -201,7 +201,7 @@
       "duration": 50,
       "price": 250,
       "currency": "RON",
-      "calEventSlug": "sedinta-online",
+      "calEventSlug": "30min",
       "icon": "💻"
     },
     {
@@ -211,7 +211,7 @@
       "duration": 90,
       "price": 450,
       "currency": "RON",
-      "calEventSlug": "evaluare-psihologica",
+      "calEventSlug": "30min",
       "icon": "📊"
     },
     {
@@ -221,7 +221,7 @@
       "duration": 50,
       "price": 1900,
       "currency": "RON",
-      "calEventSlug": "sedinta-individuala",
+      "calEventSlug": "30min",
       "icon": "📦"
     }
   ],

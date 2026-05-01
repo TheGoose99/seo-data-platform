@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getFirebaseAdminAuth } from '@/lib/firebase-admin.js'
 import { isAuthorizedInternalRequest } from '@/lib/internal-auth.js'
 import { normalizePhone } from '@/lib/phone.js'
-import { phoneLockKey, redisGet } from '@/lib/redis'
+import { getPhoneBookingLock } from '@/lib/redis'
 
 export async function POST(request: Request) {
   const expected = process.env.INTERNAL_LOCK_API_TOKEN?.trim()
@@ -14,10 +14,12 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     const idToken = typeof body?.idToken === 'string' ? body.idToken : ''
     const phoneRaw = typeof body?.phone === 'string' ? body.phone : ''
+    const clientSlug = typeof body?.clientSlug === 'string' ? body.clientSlug : ''
     if (!idToken) return NextResponse.json({ error: 'Missing idToken' }, { status: 400 })
 
     const phone = normalizePhone(phoneRaw)
     if (!phone) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 })
+    if (!clientSlug.trim()) return NextResponse.json({ error: 'Missing clientSlug' }, { status: 400 })
 
     const auth = getFirebaseAdminAuth()
     const decoded = await auth.verifyIdToken(idToken)
@@ -31,9 +33,11 @@ export async function POST(request: Request) {
       (!!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN)
     if (!hasRedis) return NextResponse.json({ locked: false, reason: 'no_store' })
 
-    const key = phoneLockKey(phone)
-    const value = await redisGet(key)
-    return NextResponse.json({ locked: !!value })
+    const lock = await getPhoneBookingLock(phone, clientSlug)
+    if (!lock) {
+      return NextResponse.json({ locked: false })
+    }
+    return NextResponse.json({ locked: true, createdAt: lock.createdAt, bookingUid: lock.bookingUid, phone: lock.phone })
   } catch (error) {
     return NextResponse.json(
       { locked: false, error: error instanceof Error ? error.message : String(error) },
